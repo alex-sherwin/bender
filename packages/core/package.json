@@ -1,0 +1,21 @@
+{
+  "name": "@bender/core",
+  "version": "0.0.1",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "extract": "tsx ./src/extractor.ts /Users/asherwin/repos/bak/tls-helpers ./dist/out.json"
+  },
+  "dependencies": {
+    "arktype": "2.1.20",
+    "tree-sitter": "0.25.0",
+    "tree-sitter-java": "0.23.5"
+  },
+  "devDependencies": {
+    "@types/node": "22.15.29",
+    "tsx": "4.20.3",
+    "typescript": "5.8.3",
+    "vite": "npm:rolldown-vite@6.3.19",
+    "vitest": "3.2.3"
+  }
+}
