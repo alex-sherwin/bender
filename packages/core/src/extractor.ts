@@ -37,7 +37,7 @@ interface ClassInfo {
 interface Import {
   wildcard: boolean;
   package: string;
-  symbol: string;
+  type: string;
 }
 
 interface FileData {
@@ -195,7 +195,7 @@ function parseConstantNode(fileData: FileData, constantNode: Parser.SyntaxNode, 
 
 function findImport(fileData: FileData, typeName: string): Import | null {
 
-  const exactMatch = fileData.imports.find(imp => !imp.wildcard && imp.symbol === typeName);
+  const exactMatch = fileData.imports.find(imp => !imp.wildcard && imp.type === typeName);
   if (exactMatch) {
     return exactMatch;
   }
@@ -438,10 +438,10 @@ function parseImportNode(importNode: Parser.SyntaxNode, sourceCode: string): Imp
   let importName = getNodeText(nameNode, sourceCode);
 
   const wildcard = importNode.children.some(child => child.type === 'asterisk');
-  const symbol = wildcard ? '*' : importName.split('.').pop() ?? importName;
+  const type = wildcard ? '*' : importName.split('.').pop() ?? importName;
   const pkg = wildcard ? importName : importName.split('.').slice(0, -1).join('.');
 
-  return { wildcard, symbol, package: pkg };
+  return { wildcard, type, package: pkg };
 }
 
 async function parseJavaFile(relativePath: string, filePath: string, sourceCode: string): Promise<FileData> {
