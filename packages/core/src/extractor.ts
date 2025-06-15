@@ -9,7 +9,6 @@ const Java = JavaImport as Parser.Language;
 
 interface Type {
   name: string;
-  fqName: string;
   package?: string;
 }
 
@@ -18,6 +17,7 @@ interface JavaMethod {
   signature: string;
   isStatic: boolean;
   returnType: string;
+  typeReferences: Type[];
 }
 
 interface JavaField {
@@ -59,6 +59,37 @@ function getNodeText(node: Parser.SyntaxNode | null | undefined, sourceCode: str
   return sourceCode.substring(node.startIndex, node.endIndex);
 }
 
+
+/**
+ * We consider a type reference "useful" if it has an associated package and the package does not begin
+ * with well known built-in packages.
+ */
+function addTypeReferenceIfUseful(refs: Type[], type: Type) {
+  if (type.package && !isWellKnownBuiltinPackage(type.package)) {
+    refs.push(type);
+  }
+}
+
+const IGNORED_JAVA_PACKAGE_PREFIXES = [
+  'java.',
+  'javax.',
+  'org.w3c.',
+  'org.xml.',
+  'com.sun.',
+  'com.oracle.',
+  'org.junit',
+  'junit.',
+  'org.hamcrest.',
+  'ch.qos',
+  'org.testcontainers',
+  'org.slf4j',
+  'org.apache.logging',
+];
+
+function isWellKnownBuiltinPackage(pkg: string): boolean {
+  return IGNORED_JAVA_PACKAGE_PREFIXES.some(prefix => pkg.startsWith(prefix));
+}
+
 function parseClassNode(classNode: Parser.SyntaxNode, sourceCode: string, fileData: FileData, type: ClassInfo["type"]): ClassInfo {
 
   const classNameNode = classNode.childForFieldName('name');
@@ -67,7 +98,7 @@ function parseClassNode(classNode: Parser.SyntaxNode, sourceCode: string, fileDa
   }
 
   const className = getNodeText(classNameNode, sourceCode);
-  log.debug(`className [${className}]`);
+  // log.debug(`className [${className}]`);
 
   const classInfo: ClassInfo = { type, name: className, fields: [], methods: [] };
 
@@ -97,7 +128,7 @@ function parseClassNode(classNode: Parser.SyntaxNode, sourceCode: string, fileDa
       }
 
       case 'method_declaration': {
-        const method = parseMethodNode(child, sourceCode);
+        const method = parseMethodNode(child, sourceCode, fileData);
         if (method) {
           classInfo.methods.push(method);
         }
@@ -147,12 +178,10 @@ function parseConstantNode(fileData: FileData, constantNode: Parser.SyntaxNode, 
   const fieldName = getNodeText(nameNode, sourceCode);
   const imp = findImport(fileData, fieldType);
   const pkg = imp?.package;
-  const fqName = pkg ? `${pkg}.${fieldType}` : fieldType;
 
   const type: Type = {
     name: fieldType,
     package: pkg,
-    fqName
   };
 
   return {
@@ -197,12 +226,10 @@ function parseFieldNode(fileData: FileData, fieldNode: Parser.SyntaxNode, source
   const fieldName = getNodeText(nameNode, sourceCode);
   const imp = findImport(fileData, fieldType);
   const pkg = imp?.package;
-  const fqName = pkg ? `${pkg}.${fieldType}` : fieldType;
 
   const type: Type = {
     name: fieldType,
     package: pkg,
-    fqName
   };
 
   return {
@@ -214,7 +241,138 @@ function parseFieldNode(fileData: FileData, fieldNode: Parser.SyntaxNode, source
   };
 }
 
-function parseMethodNode(methodNode: Parser.SyntaxNode, sourceCode: string): JavaMethod | null {
+function extractTypeReferencesFromMethodBody(methodNode: Parser.SyntaxNode, sourceCode: string, fileData: FileData): Type[] {
+
+  const typeReferences: Type[] = [];
+  const seenTypes = new Set<string>();
+
+  function visitNode(node: Parser.SyntaxNode) {
+    // Look for type references in various contexts
+    switch (node.type) {
+      case 'type_identifier':
+      case 'identifier': {
+        const typeName = getNodeText(node, sourceCode);
+
+        if (typeName === 'BEGIN_CERT') {
+          log.debug(`Found type identifier: ${typeName}`);
+        }
+
+        // Skip primitive types and common keywords
+        if (isPrimitiveType(typeName) || isCommonKeyword(typeName)) {
+          break;
+        }
+
+        // Check if this looks like a type reference (starts with uppercase)
+        if (typeName && typeName[0] === typeName[0].toUpperCase() && !seenTypes.has(typeName)) {
+          seenTypes.add(typeName);
+
+          const imp = findImport(fileData, typeName);
+          const pkg = imp?.package;
+
+          addTypeReferenceIfUseful(typeReferences, {
+            name: typeName,
+            package: pkg,
+          });
+
+        }
+        break;
+      }
+
+      case 'object_creation_expression': {
+        // Handle 'new SomeClass()' expressions
+        const typeNode = node.childForFieldName('type');
+        if (typeNode) {
+          const typeName = getNodeText(typeNode, sourceCode);
+          if (typeName && !seenTypes.has(typeName) && !isPrimitiveType(typeName)) {
+            seenTypes.add(typeName);
+
+            const imp = findImport(fileData, typeName);
+            const pkg = imp?.package;
+
+            addTypeReferenceIfUseful(typeReferences, {
+              name: typeName,
+              package: pkg,
+            });
+          }
+        }
+        break;
+      }
+
+      case 'cast_expression': {
+        // Handle casting expressions like (SomeClass) object
+        const typeNode = node.childForFieldName('type');
+        if (typeNode) {
+          const typeName = getNodeText(typeNode, sourceCode);
+          if (typeName && !seenTypes.has(typeName) && !isPrimitiveType(typeName)) {
+            seenTypes.add(typeName);
+
+            const imp = findImport(fileData, typeName);
+            const pkg = imp?.package;
+
+            addTypeReferenceIfUseful(typeReferences, {
+              name: typeName,
+              package: pkg,
+            });
+          }
+        }
+        break;
+      }
+
+      case 'variable_declaration': {
+        // Handle local variable declarations
+        const typeNode = node.childForFieldName('type');
+        if (typeNode) {
+          const typeName = getNodeText(typeNode, sourceCode);
+          if (typeName && !seenTypes.has(typeName) && !isPrimitiveType(typeName)) {
+            seenTypes.add(typeName);
+
+            const imp = findImport(fileData, typeName);
+            const pkg = imp?.package;
+
+            addTypeReferenceIfUseful(typeReferences, {
+              name: typeName,
+              package: pkg,
+            });
+          }
+        }
+        break;
+      }
+    }
+
+    // Recursively visit all child nodes
+    node.children.forEach(visitNode);
+  }
+
+  // Find the method body and traverse it
+  const bodyNode = methodNode.childForFieldName('body');
+  if (bodyNode) {
+    visitNode(bodyNode);
+  }
+
+  return typeReferences;
+}
+
+function isPrimitiveType(typeName: string): boolean {
+  const primitiveTypes = new Set([
+    'boolean', 'byte', 'char', 'short', 'int', 'long', 'float', 'double', 'void',
+    'Boolean', 'Byte', 'Character', 'Short', 'Integer', 'Long', 'Float', 'Double',
+    'String', 'Object'
+  ]);
+  return primitiveTypes.has(typeName);
+}
+
+function isCommonKeyword(word: string): boolean {
+  const keywords = new Set([
+    'this', 'super', 'null', 'true', 'false', 'return', 'if', 'else', 'for', 'while',
+    'do', 'switch', 'case', 'default', 'break', 'continue', 'try', 'catch', 'finally',
+    'throw', 'throws', 'public', 'private', 'protected', 'static', 'final', 'abstract',
+    'synchronized', 'volatile', 'transient', 'native', 'strictfp', 'class', 'interface',
+    'extends', 'implements', 'import', 'package', 'new', 'instanceof'
+  ]);
+  return keywords.has(word);
+}
+
+function parseMethodNode(methodNode: Parser.SyntaxNode, sourceCode: string, fileData: FileData): JavaMethod | null {
   const returnTypeNode = methodNode.childForFieldName('type');
   const nameNode = methodNode.childForFieldName('name');
   const paramsNode = methodNode.childForFieldName('parameters');
@@ -246,11 +404,15 @@ function parseMethodNode(methodNode: Parser.SyntaxNode, sourceCode: string): Jav
 
   const paramsString = params.map(p => `${p.type} ${p.name}`).join(', ');
 
+  // Extract type references from method body
+  const typeReferences = extractTypeReferencesFromMethodBody(methodNode, sourceCode, fileData);
+
   return {
     name: methodName,
     returnType: returnType,
     signature: `${returnType} ${methodName}(${paramsString})`,
-    isStatic: isStatic
+    isStatic: isStatic,
+    typeReferences: typeReferences
   };
 }
 
