@@ -7,32 +7,33 @@ const Java = JavaImport as Parser.Language;
 
 interface JavaMethod {
   name: string;
-  signature: string; // For methods, includes name, params, return type
-  isStatic: boolean; // For methods, whether they are static or instance
+  signature: string;
+  isStatic: boolean;
   returnType: string;
 }
 
 interface JavaField {
   name: string;
-  type: string; // For fields, parameters
-  signature: string; // For methods, includes name, params, return type
-  isStatic: boolean; // Whether the field is static or instance
+  type: string;
+  signature: string;
+  isStatic: boolean;
 }
 
 interface ClassInfo {
   name: string;
   fields: JavaField[];
   methods: JavaMethod[];
+  type: "class" | "interface";
 }
 
 interface FileData {
   filePath: string;
   packageName: string | null;
-  imports: string[]; // List of fully qualified names or patterns from imports
+  imports: string[];
   definedClasses: ClassInfo[];
 }
 
-// Type for the output JSON structure
+
 type ProjectData = Record<string, FileData>;
 
 const parser = new Parser();
@@ -43,6 +44,191 @@ function getNodeText(node: Parser.SyntaxNode | null | undefined, sourceCode: str
   return sourceCode.substring(node.startIndex, node.endIndex);
 }
 
+function parseClassNode(classNode: Parser.SyntaxNode, sourceCode: string, definedClasses: ClassInfo[], type: ClassInfo["type"]): ClassInfo {
+
+  const classNameNode = classNode.childForFieldName('name');
+  if (!classNameNode) {
+    throw new Error('Class node missing name');
+  }
+
+  const className = getNodeText(classNameNode, sourceCode);
+  console.log(`className [${className}]`);
+
+  const classInfo: ClassInfo = { type, name: className, fields: [], methods: [] };
+
+  const classBodyNode = classNode.childForFieldName('body');
+  if (!classBodyNode) {
+    return classInfo;
+  }
+
+  // Process all children of the class body
+  classBodyNode.children.forEach(child => {
+    switch (child.type) {
+
+      case 'constant_declaration': {
+        const field = parseConstantNode(child, sourceCode);
+        if (field) {
+          classInfo.fields.push(field);
+        }
+        break;
+      }
+
+      case 'field_declaration': {
+        const field = parseFieldNode(child, sourceCode);
+        if (field) {
+          classInfo.fields.push(field);
+        }
+        break;
+      }
+
+      case 'method_declaration': {
+        const method = parseMethodNode(child, sourceCode);
+        if (method) {
+          classInfo.methods.push(method);
+        }
+        break;
+      }
+
+      case 'interface_declaration': {
+        // Recursively parse nested classes
+        const nestedClass = parseClassNode(child, sourceCode, definedClasses, "interface");
+        definedClasses.push(nestedClass);
+        break;
+      }
+
+      case 'class_declaration': {
+        // Recursively parse nested classes
+        const nestedClass = parseClassNode(child, sourceCode, definedClasses, "class");
+        definedClasses.push(nestedClass);
+        break;
+      }
+
+      default: {
+        console.warn(`[${className}] Unhandled class node type: ${child.type}`);
+        break;
+      }
+
+    }
+
+  });
+
+  return classInfo;
+}
+
+function parseConstantNode(constantNode: Parser.SyntaxNode, sourceCode: string): JavaField | null {
+  const typeNode = constantNode.childForFieldName('type');
+  const declaratorNode = constantNode.children.find(c => c.type === 'variable_declarator');
+  const nameNode = declaratorNode?.childForFieldName('name');
+
+  if (!nameNode) return null;
+
+  // Check if field is static
+  const isStatic = constantNode.children.some(child =>
+    child.type === 'modifiers' &&
+    child.children.some(modifier => modifier.type === 'static')
+  );
+
+  const fieldType = typeNode ? getNodeText(typeNode, sourceCode) : 'unknown';
+  const fieldName = getNodeText(nameNode, sourceCode);
+
+  return {
+    name: fieldName,
+    type: fieldType,
+    signature: `${fieldType} ${fieldName}`,
+    isStatic: isStatic
+  };
+}
+
+function parseFieldNode(fieldNode: Parser.SyntaxNode, sourceCode: string): JavaField | null {
+  const typeNode = fieldNode.childForFieldName('type');
+  const declaratorNode = fieldNode.children.find(c => c.type === 'variable_declarator');
+  const nameNode = declaratorNode?.childForFieldName('name');
+
+  if (!nameNode) return null;
+
+  // Check if field is static
+  const isStatic = fieldNode.children.some(child =>
+    child.type === 'modifiers' &&
+    child.children.some(modifier => modifier.type === 'static')
+  );
+
+  const fieldType = typeNode ? getNodeText(typeNode, sourceCode) : 'unknown';
+  const fieldName = getNodeText(nameNode, sourceCode);
+
+  return {
+    name: fieldName,
+    type: fieldType,
+    signature: `${fieldType} ${fieldName}`,
+    isStatic: isStatic
+  };
+}
+
+function parseMethodNode(methodNode: Parser.SyntaxNode, sourceCode: string): JavaMethod | null {
+  const returnTypeNode = methodNode.childForFieldName('type');
+  const nameNode = methodNode.childForFieldName('name');
+  const paramsNode = methodNode.childForFieldName('parameters');
+
+  if (!nameNode) return null;
+
+  const methodName = getNodeText(nameNode, sourceCode);
+  const returnType = returnTypeNode ? getNodeText(returnTypeNode, sourceCode) : 'void';
+
+  // Check if method is static
+  const isStatic = methodNode.children.some(child =>
+    child.type === 'modifiers' &&
+    child.children.some(modifier => modifier.type === 'static')
+  );
+
+  const params: { name: string, type: string }[] = [];
+  if (paramsNode) {
+    paramsNode.children.filter(p => p.type === 'formal_parameter').forEach(param => {
+      const paramTypeNode = param.childForFieldName('type');
+      const paramNameNode = param.childForFieldName('name');
+      if (paramTypeNode && paramNameNode) {
+        params.push({
+          name: getNodeText(paramNameNode, sourceCode),
+          type: getNodeText(paramTypeNode, sourceCode)
+        });
+      }
+    });
+  }
+
+  const paramsString = params.map(p => `${p.type} ${p.name}`).join(', ');
+
+  return {
+    name: methodName,
+    returnType: returnType,
+    signature: `${returnType} ${methodName}(${paramsString})`,
+    isStatic: isStatic
+  };
+}
+
+function parsePackageNode(packageNode: Parser.SyntaxNode, sourceCode: string): string {
+  // Package name can be either identifier or scoped_identifier
+  const nameNode = packageNode.children.find(child =>
+    child.type === 'identifier' || child.type === 'scoped_identifier'
+  );
+  return nameNode ? getNodeText(nameNode, sourceCode) : '';
+}
+
+function parseImportNode(importNode: Parser.SyntaxNode, sourceCode: string): string {
+  // Import name can be either identifier or scoped_identifier
+  const nameNode = importNode.children.find(child =>
+    child.type === 'identifier' || child.type === 'scoped_identifier'
+  );
+
+  if (!nameNode) return '';
+
+  let importName = getNodeText(nameNode, sourceCode);
+
+  // Check if it's a wildcard import
+  if (importNode.children.some(child => child.type === 'asterisk')) {
+    importName += '.*';
+  }
+
+  return importName;
+}
+
 async function parseJavaFile(filePath: string, sourceCode: string): Promise<FileData> {
   const tree = parser.parse(sourceCode);
   const rootNode = tree.rootNode;
@@ -51,163 +237,46 @@ async function parseJavaFile(filePath: string, sourceCode: string): Promise<File
   const imports: string[] = [];
   const definedClasses: ClassInfo[] = [];
 
-  // Query for package
-  const packageQuery = new Parser.Query(Java, `
-    (package_declaration (identifier) @pkg.name)
-    (package_declaration (scoped_identifier) @pkg.name)
-  `);
-  const packageCaptures = packageQuery.captures(rootNode);
-  if (packageCaptures.length > 0) {
-    packageName = getNodeText(packageCaptures[0].node, sourceCode);
-  }
-
-  // Query for imports
-  const simpleImportQuery = new Parser.Query(Java, `
-    (import_declaration
-      (scoped_identifier) @name
-      ((asterisk))? @wildcard)
-    (import_declaration
-      (identifier) @name
-      ((asterisk))? @wildcard)
-  `);
-  simpleImportQuery.captures(rootNode).forEach(capture => {
-    if (capture.name === 'name') {
-      let importName = getNodeText(capture.node, sourceCode);
-      // Get the parent import_declaration node
-      const importDeclarationNode = capture.node.parent;
-      // If any child of the declaration is an asterisk, it's a wildcard import
-      if (importDeclarationNode?.children.some(child => child.type === 'asterisk')) {
-        importName += '.*';
-      }
-      imports.push(importName);
-    }
-  });
-
-
-  // Query for classes and their members
-  const classQuery = new Parser.Query(Java, `
-    (class_declaration
-      name: (identifier) @class.name
-      body: (class_body
-        (field_declaration
-          type: (_) @field.type
-          declarator: (variable_declarator
-            name: (identifier) @field.name
-          )
-        )* @fields
-        (method_declaration
-          type: (_) @method.return_type
-          name: (identifier) @method.name
-          parameters: (formal_parameters) @method.parameters
-        )* @methods
-      )
-    )
-  `);
-
-  const classResults = classQuery.captures(rootNode);
-
-  // console.log("classResults", classResults);
-
-  // More detailed queries might be needed, especially for complex signatures.
-  // This is a simplified extraction.
-
+  // Iterate through all top-level nodes
   rootNode.children.forEach(node => {
-    console.log(`node.type [${node.type}]`);
 
-  });
+    // console.log(`node.type [${node.type}]`);
 
-  rootNode.children.filter(node => node.type === 'class_declaration').forEach(classNode => {
-    const classNameNode = classNode.childForFieldName('name');
-    if (!classNameNode) return;
+    switch (node.type) {
 
-    const className = getNodeText(classNameNode, sourceCode);
-    console.log(`className [${className}]`);
-    const classInfo: ClassInfo = { name: className, fields: [], methods: [] };
-
-    const classBodyNode = classNode.childForFieldName('body');
-    if (!classBodyNode) {
-      definedClasses.push(classInfo);
-      return;
-    }
-
-    // Extract nested classes
-    classBodyNode.children.filter(child => child.type === 'class_declaration').forEach(classNode => {
-      const classNameNode = classNode.childForFieldName('name');
-      if (!classNameNode) return;
-
-      const className = getNodeText(classNameNode, sourceCode);
-
-
-    });
-
-    // Extract Fields
-    classBodyNode.children.filter(child => child.type === 'field_declaration').forEach(fieldNode => {
-      const typeNode = fieldNode.childForFieldName('type');
-      const declaratorNode = fieldNode.children.find(c => c.type === 'variable_declarator');
-      const nameNode = declaratorNode?.childForFieldName('name');
-
-      // Check if field is static
-      const isStatic = fieldNode.children.some(child =>
-        child.type === 'modifiers' &&
-        child.children.some(modifier => modifier.type === 'static')
-      );
-
-      if (nameNode) {
-        const fieldType = typeNode ? getNodeText(typeNode, sourceCode) : 'unknown';
-        const fieldName = getNodeText(nameNode, sourceCode);
-        classInfo.fields.push({
-          name: fieldName,
-          type: fieldType,
-          signature: `${fieldType} ${fieldName}`,
-          isStatic: isStatic
-        });
+      case 'package_declaration': {
+        packageName = parsePackageNode(node, sourceCode);
+        break;
       }
-    });
 
-    // Extract Methods
-    classBodyNode.children.filter(child => child.type === 'method_declaration').forEach(methodNode => {
-      const returnTypeNode = methodNode.childForFieldName('type');
-      const nameNode = methodNode.childForFieldName('name');
-      const paramsNode = methodNode.childForFieldName('parameters');
-
-      if (nameNode) {
-        const methodName = getNodeText(nameNode, sourceCode);
-        const returnType = returnTypeNode ? getNodeText(returnTypeNode, sourceCode) : 'void';
-
-        // Check if method is static
-        const isStatic = methodNode.children.some(child =>
-          child.type === 'modifiers' &&
-          child.children.some(modifier => modifier.type === 'static')
-        );
-
-        const params: { name: string, type: string }[] = [];
-        if (paramsNode) {
-          paramsNode.children.filter(p => p.type === 'formal_parameter').forEach(param => {
-            const paramTypeNode = param.childForFieldName('type');
-            const paramNameNode = param.childForFieldName('name');
-            if (paramTypeNode && paramNameNode) {
-              params.push({
-                name: getNodeText(paramNameNode, sourceCode),
-                type: getNodeText(paramTypeNode, sourceCode)
-              });
-            }
-          });
+      case 'import_declaration': {
+        const importName = parseImportNode(node, sourceCode);
+        if (importName) {
+          imports.push(importName);
         }
-
-        const paramsString = params.map(p => `${p.type} ${p.name}`).join(', ');
-        classInfo.methods.push({
-          name: methodName,
-          returnType: returnType,
-          signature: `${returnType} ${methodName}(${paramsString})`,
-          isStatic: isStatic
-        });
+        break;
       }
-    });
+
+      case 'interface_declaration': {
+        const classInfo = parseClassNode(node, sourceCode, definedClasses, "interface");
+        definedClasses.push(classInfo);
+        break;
+      }
+
+      case 'class_declaration': {
+        const classInfo = parseClassNode(node, sourceCode, definedClasses, "class");
+        definedClasses.push(classInfo);
+        break;
+      }
+
+      default: {
+        console.warn(`Unhandled top-level node type: ${node.type}`);
+        break;
+      }
 
 
-    definedClasses.push(classInfo);
+    }
   });
-
 
   return {
     filePath: path.resolve(filePath), // Store absolute path
@@ -251,10 +320,6 @@ async function main() {
     process.exit(1);
   }
 
-  // await Parser.init(); // Initialize Tree-sitter (loads tree-sitter.wasm)
-  // Ensure tree-sitter-java grammar is loaded.
-  // If 'tree-sitter-java' is a standard npm package, this should work.
-  // Otherwise, you might need: await Parser.Language.load('path/to/tree-sitter-java.wasm');
   try {
     parser.setLanguage(Java);
   } catch (e) {
