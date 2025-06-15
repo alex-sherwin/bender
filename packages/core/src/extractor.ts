@@ -18,6 +18,7 @@ interface JavaMethod {
   isStatic: boolean;
   returnType: string;
   typeReferences: Type[];
+  comment?: string;
 }
 
 interface JavaField {
@@ -372,8 +373,63 @@ function isCommonKeyword(word: string): boolean {
   return keywords.has(word);
 }
 
+function extractCommentFromMethod(methodNode: Parser.SyntaxNode, sourceCode: string): string | undefined {
+  // Look for comment nodes immediately before the method
+  const parent = methodNode.parent;
+  if (!parent) return undefined;
+
+  const methodIndex = parent.children.indexOf(methodNode);
+  if (methodIndex === 0) return undefined;
+
+  const comments: string[] = [];
+  
+  // Check for a single block comment immediately before the method
+  const prevSibling = parent.children[methodIndex - 1];
+  if (prevSibling && prevSibling.type === 'block_comment') {
+    const commentText = getNodeText(prevSibling, sourceCode);
+    
+    // Clean up block comment text by removing comment markers
+    const cleanedComment = commentText
+      .replace(/^\/\*\*?/, '')
+      .replace(/\*\/$/, '')
+      .split('\n')
+      .map(line => line.replace(/^\s*\*\s?/, '').trim())
+      .filter(line => line.length > 0)
+      .join('\n')
+      .trim();
+    
+    return cleanedComment || undefined;
+  }
+  
+  // Check for consecutive line comments before the method
+  let currentIndex = methodIndex - 1;
+  while (currentIndex >= 0) {
+    const node = parent.children[currentIndex];
+    if (node.type === 'line_comment') {
+      const commentText = getNodeText(node, sourceCode);
+      // Clean up line comment by removing // prefix
+      const cleanedComment = commentText.replace(/^\/\/\s?/, '').trim();
+      if (cleanedComment) {
+        comments.unshift(cleanedComment); // Add to beginning to maintain order
+      }
+      currentIndex--;
+    } else {
+      // Stop if we hit a non-comment node
+      break;
+    }
+  }
+  
+  if (comments.length > 0) {
+    return comments.join('\n');
+  }
+
+  return undefined;
+}
+
 function parseMethodNode(methodNode: Parser.SyntaxNode, sourceCode: string, fileData: FileData): JavaMethod | null {
+
   const returnTypeNode = methodNode.childForFieldName('type');
+
   const nameNode = methodNode.childForFieldName('name');
   const paramsNode = methodNode.childForFieldName('parameters');
 
@@ -404,15 +460,24 @@ function parseMethodNode(methodNode: Parser.SyntaxNode, sourceCode: string, file
 
   const paramsString = params.map(p => `${p.type} ${p.name}`).join(', ');
 
+  const signature = `${returnType} ${methodName}(${paramsString})`;
+
   // Extract type references from method body
   const typeReferences = extractTypeReferencesFromMethodBody(methodNode, sourceCode, fileData);
+
+  // Extract comment for the method
+  if (signature === "void checkClientTrusted(X509Certificate[] x509Certificates, String s)") {
+    log.debug("here");
+  }
+  const comment = extractCommentFromMethod(methodNode, sourceCode);
 
   return {
     name: methodName,
     returnType: returnType,
-    signature: `${returnType} ${methodName}(${paramsString})`,
+    signature,
     isStatic: isStatic,
-    typeReferences: typeReferences
+    typeReferences: typeReferences,
+    comment: comment
   };
 }
 
