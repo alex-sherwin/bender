@@ -42,6 +42,7 @@ interface Import {
 
 interface FileData {
   filePath: string;
+  filename: string;
   packageName: string | null;
   imports: Import[];
   definedClasses: ClassInfo[];
@@ -281,12 +282,14 @@ function parseImportNode(importNode: Parser.SyntaxNode, sourceCode: string): Imp
   return { wildcard, symbol, package: pkg };
 }
 
-async function parseJavaFile(filePath: string, sourceCode: string): Promise<FileData> {
+async function parseJavaFile(relativePath: string, filePath: string, sourceCode: string): Promise<FileData> {
   const tree = parser.parse(sourceCode);
   const rootNode = tree.rootNode;
 
   const fileData: FileData = {
-    filePath: path.resolve(filePath), // Store absolute path
+    // filePath: path.resolve(filePath), // Store absolute path
+    filePath: relativePath,
+    filename: path.basename(filePath),
     packageName: null,
     imports: [],
     definedClasses: [],
@@ -336,17 +339,19 @@ async function parseJavaFile(filePath: string, sourceCode: string): Promise<File
   return fileData;
 }
 
-async function scanDirectory(dirPath: string, projectData: ProjectData): Promise<void> {
+async function scanDirectory(projectRootDir: string, dirPath: string, projectData: ProjectData): Promise<void> {
   const entries = await fs.readdir(dirPath, { withFileTypes: true });
   for (const entry of entries) {
     const fullPath = path.join(dirPath, entry.name);
     if (entry.isDirectory()) {
-      await scanDirectory(fullPath, projectData);
+      await scanDirectory(projectRootDir, fullPath, projectData);
     } else if (entry.isFile() && entry.name.endsWith('.java')) {
       log.debug(`Parsing: ${fullPath}`);
       try {
         const content = await fs.readFile(fullPath, 'utf-8');
-        const fileAstData = await parseJavaFile(fullPath, content);
+        const relativePath = path.relative(projectRootDir, fullPath);
+        log.warn(`projectRootDir [${projectRootDir}]`);
+        const fileAstData = await parseJavaFile(relativePath, fullPath, content);
         projectData[fileAstData.filePath] = fileAstData;
       } catch (error) {
         log.error(`Error parsing file ${fullPath}:`, error);
@@ -388,7 +393,8 @@ async function main() {
   for (const srcDir of javaSrcDirs) {
     if (await fs.stat(srcDir).then(s => s.isDirectory()).catch(() => false)) {
       log.info(`Scanning directory: ${srcDir}`);
-      await scanDirectory(srcDir, projectData);
+
+      await scanDirectory(projectRootDir, srcDir, projectData);
     } else {
       log.warn(`Directory not found, skipping: ${srcDir}`);
     }

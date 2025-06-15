@@ -4,7 +4,8 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "extract": "tsx ./src/extractor.ts /Users/asherwin/repos/bak/tls-helpers ./dist/out.json"
+    "extract": "tsx ./src/extractor.ts ../../../bak/tls-helpers ./dist/out.json",
+    "extract2": "tsx ./src/extractor.ts /Users/asherwin/repos/bak/tls-helpers ./dist/out.json"
   },
   "dependencies": {
     "arktype": "2.1.20",
