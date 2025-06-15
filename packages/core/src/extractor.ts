@@ -3,7 +3,15 @@ import path from 'node:path';
 import Parser from 'tree-sitter';
 import JavaImport from 'tree-sitter-java';
 
+import { log } from "./logger";
+
 const Java = JavaImport as Parser.Language;
+
+interface Type {
+  name: string;
+  fqName: string;
+  package?: string;
+}
 
 interface JavaMethod {
   name: string;
@@ -14,9 +22,9 @@ interface JavaMethod {
 
 interface JavaField {
   name: string;
-  type: string;
+  type: Type;
   signature: string;
-  isStatic: boolean;
+  static: boolean;
 }
 
 interface ClassInfo {
@@ -26,10 +34,16 @@ interface ClassInfo {
   type: "class" | "interface";
 }
 
+interface Import {
+  wildcard: boolean;
+  package: string;
+  symbol: string;
+}
+
 interface FileData {
   filePath: string;
   packageName: string | null;
-  imports: string[];
+  imports: Import[];
   definedClasses: ClassInfo[];
 }
 
@@ -44,7 +58,7 @@ function getNodeText(node: Parser.SyntaxNode | null | undefined, sourceCode: str
   return sourceCode.substring(node.startIndex, node.endIndex);
 }
 
-function parseClassNode(classNode: Parser.SyntaxNode, sourceCode: string, definedClasses: ClassInfo[], type: ClassInfo["type"]): ClassInfo {
+function parseClassNode(classNode: Parser.SyntaxNode, sourceCode: string, fileData: FileData, type: ClassInfo["type"]): ClassInfo {
 
   const classNameNode = classNode.childForFieldName('name');
   if (!classNameNode) {
@@ -52,7 +66,7 @@ function parseClassNode(classNode: Parser.SyntaxNode, sourceCode: string, define
   }
 
   const className = getNodeText(classNameNode, sourceCode);
-  console.log(`className [${className}]`);
+  log.debug(`className [${className}]`);
 
   const classInfo: ClassInfo = { type, name: className, fields: [], methods: [] };
 
@@ -66,7 +80,7 @@ function parseClassNode(classNode: Parser.SyntaxNode, sourceCode: string, define
     switch (child.type) {
 
       case 'constant_declaration': {
-        const field = parseConstantNode(child, sourceCode);
+        const field = parseConstantNode(fileData, child, sourceCode);
         if (field) {
           classInfo.fields.push(field);
         }
@@ -74,7 +88,7 @@ function parseClassNode(classNode: Parser.SyntaxNode, sourceCode: string, define
       }
 
       case 'field_declaration': {
-        const field = parseFieldNode(child, sourceCode);
+        const field = parseFieldNode(fileData, child, sourceCode);
         if (field) {
           classInfo.fields.push(field);
         }
@@ -91,20 +105,20 @@ function parseClassNode(classNode: Parser.SyntaxNode, sourceCode: string, define
 
       case 'interface_declaration': {
         // Recursively parse nested classes
-        const nestedClass = parseClassNode(child, sourceCode, definedClasses, "interface");
-        definedClasses.push(nestedClass);
+        const nestedClass = parseClassNode(child, sourceCode, fileData, "interface");
+        fileData.definedClasses.push(nestedClass);
         break;
       }
 
       case 'class_declaration': {
         // Recursively parse nested classes
-        const nestedClass = parseClassNode(child, sourceCode, definedClasses, "class");
-        definedClasses.push(nestedClass);
+        const nestedClass = parseClassNode(child, sourceCode, fileData, "class");
+        fileData.definedClasses.push(nestedClass);
         break;
       }
 
       default: {
-        console.warn(`[${className}] Unhandled class node type: ${child.type}`);
+        log.warn(`[${className}] Unhandled class node type: ${child.type}`);
         break;
       }
 
@@ -115,7 +129,7 @@ function parseClassNode(classNode: Parser.SyntaxNode, sourceCode: string, define
   return classInfo;
 }
 
-function parseConstantNode(constantNode: Parser.SyntaxNode, sourceCode: string): JavaField | null {
+function parseConstantNode(fileData: FileData, constantNode: Parser.SyntaxNode, sourceCode: string): JavaField | null {
   const typeNode = constantNode.childForFieldName('type');
   const declaratorNode = constantNode.children.find(c => c.type === 'variable_declarator');
   const nameNode = declaratorNode?.childForFieldName('name');
@@ -130,21 +144,47 @@ function parseConstantNode(constantNode: Parser.SyntaxNode, sourceCode: string):
 
   const fieldType = typeNode ? getNodeText(typeNode, sourceCode) : 'unknown';
   const fieldName = getNodeText(nameNode, sourceCode);
+  const imp = findImport(fileData, fieldType);
+  const pkg = imp?.package;
+  const fqName = pkg ? `${pkg}.${fieldType}` : fieldType;
+
+  const type: Type = {
+    name: fieldType,
+    package: pkg,
+    fqName
+  };
 
   return {
     name: fieldName,
-    type: fieldType,
+    // type: fieldType,
+    type,
     signature: `${fieldType} ${fieldName}`,
-    isStatic: isStatic
+    static: isStatic
   };
 }
 
-function parseFieldNode(fieldNode: Parser.SyntaxNode, sourceCode: string): JavaField | null {
+function findImport(fileData: FileData, typeName: string): Import | null {
+
+  const exactMatch = fileData.imports.find(imp => !imp.wildcard && imp.symbol === typeName);
+  if (exactMatch) {
+    return exactMatch;
+  }
+
+  return null;
+}
+
+
+
+function parseFieldNode(fileData: FileData, fieldNode: Parser.SyntaxNode, sourceCode: string): JavaField | null {
+
   const typeNode = fieldNode.childForFieldName('type');
+
   const declaratorNode = fieldNode.children.find(c => c.type === 'variable_declarator');
   const nameNode = declaratorNode?.childForFieldName('name');
 
-  if (!nameNode) return null;
+  if (!nameNode) {
+    return null;
+  }
 
   // Check if field is static
   const isStatic = fieldNode.children.some(child =>
@@ -154,12 +194,22 @@ function parseFieldNode(fieldNode: Parser.SyntaxNode, sourceCode: string): JavaF
 
   const fieldType = typeNode ? getNodeText(typeNode, sourceCode) : 'unknown';
   const fieldName = getNodeText(nameNode, sourceCode);
+  const imp = findImport(fileData, fieldType);
+  const pkg = imp?.package;
+  const fqName = pkg ? `${pkg}.${fieldType}` : fieldType;
+
+  const type: Type = {
+    name: fieldType,
+    package: pkg,
+    fqName
+  };
 
   return {
     name: fieldName,
-    type: fieldType,
+    // type: fieldType,
+    type,
     signature: `${fieldType} ${fieldName}`,
-    isStatic: isStatic
+    static: isStatic
   };
 }
 
@@ -211,31 +261,36 @@ function parsePackageNode(packageNode: Parser.SyntaxNode, sourceCode: string): s
   return nameNode ? getNodeText(nameNode, sourceCode) : '';
 }
 
-function parseImportNode(importNode: Parser.SyntaxNode, sourceCode: string): string {
+function parseImportNode(importNode: Parser.SyntaxNode, sourceCode: string): Import | null {
+
   // Import name can be either identifier or scoped_identifier
   const nameNode = importNode.children.find(child =>
     child.type === 'identifier' || child.type === 'scoped_identifier'
   );
 
-  if (!nameNode) return '';
+  if (!nameNode) {
+    return null;
+  }
 
   let importName = getNodeText(nameNode, sourceCode);
 
-  // Check if it's a wildcard import
-  if (importNode.children.some(child => child.type === 'asterisk')) {
-    importName += '.*';
-  }
+  const wildcard = importNode.children.some(child => child.type === 'asterisk');
+  const symbol = wildcard ? '*' : importName.split('.').pop() ?? importName;
+  const pkg = wildcard ? importName : importName.split('.').slice(0, -1).join('.');
 
-  return importName;
+  return { wildcard, symbol, package: pkg };
 }
 
 async function parseJavaFile(filePath: string, sourceCode: string): Promise<FileData> {
   const tree = parser.parse(sourceCode);
   const rootNode = tree.rootNode;
 
-  let packageName: string | null = null;
-  const imports: string[] = [];
-  const definedClasses: ClassInfo[] = [];
+  const fileData: FileData = {
+    filePath: path.resolve(filePath), // Store absolute path
+    packageName: null,
+    imports: [],
+    definedClasses: [],
+  };
 
   // Iterate through all top-level nodes
   rootNode.children.forEach(node => {
@@ -245,32 +300,32 @@ async function parseJavaFile(filePath: string, sourceCode: string): Promise<File
     switch (node.type) {
 
       case 'package_declaration': {
-        packageName = parsePackageNode(node, sourceCode);
+        fileData.packageName = parsePackageNode(node, sourceCode);
         break;
       }
 
       case 'import_declaration': {
-        const importName = parseImportNode(node, sourceCode);
-        if (importName) {
-          imports.push(importName);
+        const imp0rt = parseImportNode(node, sourceCode);
+        if (imp0rt) {
+          fileData.imports.push(imp0rt);
         }
         break;
       }
 
       case 'interface_declaration': {
-        const classInfo = parseClassNode(node, sourceCode, definedClasses, "interface");
-        definedClasses.push(classInfo);
+        const classInfo = parseClassNode(node, sourceCode, fileData, "interface");
+        fileData.definedClasses.push(classInfo);
         break;
       }
 
       case 'class_declaration': {
-        const classInfo = parseClassNode(node, sourceCode, definedClasses, "class");
-        definedClasses.push(classInfo);
+        const classInfo = parseClassNode(node, sourceCode, fileData, "class");
+        fileData.definedClasses.push(classInfo);
         break;
       }
 
       default: {
-        console.warn(`Unhandled top-level node type: ${node.type}`);
+        log.warn(`Unhandled top-level node type: ${node.type}`);
         break;
       }
 
@@ -278,12 +333,7 @@ async function parseJavaFile(filePath: string, sourceCode: string): Promise<File
     }
   });
 
-  return {
-    filePath: path.resolve(filePath), // Store absolute path
-    packageName,
-    imports,
-    definedClasses,
-  };
+  return fileData;
 }
 
 async function scanDirectory(dirPath: string, projectData: ProjectData): Promise<void> {
@@ -293,13 +343,13 @@ async function scanDirectory(dirPath: string, projectData: ProjectData): Promise
     if (entry.isDirectory()) {
       await scanDirectory(fullPath, projectData);
     } else if (entry.isFile() && entry.name.endsWith('.java')) {
-      console.log(`Parsing: ${fullPath}`);
+      log.debug(`Parsing: ${fullPath}`);
       try {
         const content = await fs.readFile(fullPath, 'utf-8');
         const fileAstData = await parseJavaFile(fullPath, content);
         projectData[fileAstData.filePath] = fileAstData;
       } catch (error) {
-        console.error(`Error parsing file ${fullPath}:`, error);
+        log.error(`Error parsing file ${fullPath}:`, error);
       }
     }
   }
@@ -308,7 +358,7 @@ async function scanDirectory(dirPath: string, projectData: ProjectData): Promise
 async function main() {
   const args = process.argv.slice(2);
   if (args.length < 1) {
-    console.error('Usage: ts-node extractor.ts <maven_project_root_dir> [output_file.json]');
+    log.error('Usage: ts-node extractor.ts <maven_project_root_dir> [output_file.json]');
     process.exit(1);
   }
 
@@ -316,15 +366,15 @@ async function main() {
   const outputFilePath = args[1] ? path.resolve(args[1]) : path.resolve(projectRootDir, 'project-data.json');
 
   if (!await fs.stat(projectRootDir).then(s => s.isDirectory()).catch(() => false)) {
-    console.error(`Error: Project root directory not found: ${projectRootDir}`);
+    log.error(`Error: Project root directory not found: ${projectRootDir}`);
     process.exit(1);
   }
 
   try {
     parser.setLanguage(Java);
   } catch (e) {
-    console.error("Failed to set Tree-sitter Java language. Ensure tree-sitter-java.wasm is accessible.", e);
-    console.log("You might need to copy 'tree-sitter.wasm' from 'node_modules/tree-sitter/' and 'tree-sitter-java.wasm' from 'node_modules/tree-sitter-java/wasm/' to your project directory or ensure your NODE_PATH is set up correctly.");
+    log.error("Failed to set Tree-sitter Java language. Ensure tree-sitter-java.wasm is accessible.", e);
+    log.error("You might need to copy 'tree-sitter.wasm' from 'node_modules/tree-sitter/' and 'tree-sitter-java.wasm' from 'node_modules/tree-sitter-java/wasm/' to your project directory or ensure your NODE_PATH is set up correctly.");
     process.exit(1);
   }
 
@@ -337,17 +387,17 @@ async function main() {
 
   for (const srcDir of javaSrcDirs) {
     if (await fs.stat(srcDir).then(s => s.isDirectory()).catch(() => false)) {
-      console.log(`Scanning directory: ${srcDir}`);
+      log.info(`Scanning directory: ${srcDir}`);
       await scanDirectory(srcDir, projectData);
     } else {
-      console.log(`Directory not found, skipping: ${srcDir}`);
+      log.warn(`Directory not found, skipping: ${srcDir}`);
     }
   }
 
   await fs.mkdir(path.dirname(outputFilePath), { recursive: true });
 
   await fs.writeFile(outputFilePath, JSON.stringify(projectData, null, 2));
-  console.log(`Project data extracted to: ${outputFilePath}`);
+  log.info(`Project data extracted to: ${outputFilePath}`);
 }
 
-main().catch(console.error);
+main().catch(log.error);
