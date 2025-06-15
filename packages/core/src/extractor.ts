@@ -33,6 +33,7 @@ interface ClassInfo {
   fields: JavaField[];
   methods: JavaMethod[];
   type: "class" | "interface";
+  comment?: string;
 }
 
 interface Import {
@@ -101,7 +102,10 @@ function parseClassNode(classNode: Parser.SyntaxNode, sourceCode: string, fileDa
   const className = getNodeText(classNameNode, sourceCode);
   // log.debug(`className [${className}]`);
 
-  const classInfo: ClassInfo = { type, name: className, fields: [], methods: [] };
+  // Extract comment for the class
+  const comment = extractCommentFromNode(classNode, sourceCode);
+
+  const classInfo: ClassInfo = { type, name: className, fields: [], methods: [], comment };
 
   const classBodyNode = classNode.childForFieldName('body');
   if (!classBodyNode) {
@@ -373,18 +377,18 @@ function isCommonKeyword(word: string): boolean {
   return keywords.has(word);
 }
 
-function extractCommentFromMethod(methodNode: Parser.SyntaxNode, sourceCode: string): string | undefined {
-  // Look for comment nodes immediately before the method
-  const parent = methodNode.parent;
+function extractCommentFromNode(targetNode: Parser.SyntaxNode, sourceCode: string): string | undefined {
+  // Look for comment nodes immediately before the target node
+  const parent = targetNode.parent;
   if (!parent) return undefined;
 
-  const methodIndex = parent.children.indexOf(methodNode);
-  if (methodIndex === 0) return undefined;
+  const targetIndex = parent.children.indexOf(targetNode);
+  if (targetIndex === 0) return undefined;
 
   const comments: string[] = [];
   
-  // Check for a single block comment immediately before the method
-  const prevSibling = parent.children[methodIndex - 1];
+  // Check for a single block comment immediately before the target
+  const prevSibling = parent.children[targetIndex - 1];
   if (prevSibling && prevSibling.type === 'block_comment') {
     const commentText = getNodeText(prevSibling, sourceCode);
     
@@ -401,8 +405,8 @@ function extractCommentFromMethod(methodNode: Parser.SyntaxNode, sourceCode: str
     return cleanedComment || undefined;
   }
   
-  // Check for consecutive line comments before the method
-  let currentIndex = methodIndex - 1;
+  // Check for consecutive line comments before the target
+  let currentIndex = targetIndex - 1;
   while (currentIndex >= 0) {
     const node = parent.children[currentIndex];
     if (node.type === 'line_comment') {
@@ -424,6 +428,10 @@ function extractCommentFromMethod(methodNode: Parser.SyntaxNode, sourceCode: str
   }
 
   return undefined;
+}
+
+function extractCommentFromMethod(methodNode: Parser.SyntaxNode, sourceCode: string): string | undefined {
+  return extractCommentFromNode(methodNode, sourceCode);
 }
 
 function parseMethodNode(methodNode: Parser.SyntaxNode, sourceCode: string, fileData: FileData): JavaMethod | null {
