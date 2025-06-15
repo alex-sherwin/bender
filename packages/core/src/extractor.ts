@@ -1,5 +1,3 @@
-import fs from 'node:fs/promises';
-import path from 'node:path';
 import Parser from 'tree-sitter';
 import JavaImport from 'tree-sitter-java';
 
@@ -52,8 +50,6 @@ interface FileData {
 
 
 type ProjectData = Record<string, FileData>;
-
-const parser = new Parser();
 
 // Helper function to get text of a node
 function getNodeText(node: Parser.SyntaxNode | null | undefined, sourceCode: string): string {
@@ -517,14 +513,13 @@ function parseImportNode(importNode: Parser.SyntaxNode, sourceCode: string): Imp
   return { wildcard, type, package: pkg };
 }
 
-async function parseJavaFile(relativePath: string, filePath: string, sourceCode: string): Promise<FileData> {
+function parseJavaFile(parser: Parser, relativePath: string, fileName: string, sourceCode: string): FileData {
   const tree = parser.parse(sourceCode);
   const rootNode = tree.rootNode;
 
   const fileData: FileData = {
-    // filePath: path.resolve(filePath), // Store absolute path
     filePath: relativePath,
-    filename: path.basename(filePath),
+    filename: fileName,
     packageName: null,
     imports: [],
     definedClasses: [],
@@ -574,71 +569,21 @@ async function parseJavaFile(relativePath: string, filePath: string, sourceCode:
   return fileData;
 }
 
-async function scanDirectory(projectRootDir: string, dirPath: string, projectData: ProjectData): Promise<void> {
-  const entries = await fs.readdir(dirPath, { withFileTypes: true });
-  for (const entry of entries) {
-    const fullPath = path.join(dirPath, entry.name);
-    if (entry.isDirectory()) {
-      await scanDirectory(projectRootDir, fullPath, projectData);
-    } else if (entry.isFile() && entry.name.endsWith('.java')) {
-      log.debug(`Parsing: ${fullPath}`);
-      try {
-        const content = await fs.readFile(fullPath, 'utf-8');
-        const relativePath = path.relative(projectRootDir, fullPath);
-        log.warn(`projectRootDir [${projectRootDir}]`);
-        const fileAstData = await parseJavaFile(relativePath, fullPath, content);
-        projectData[fileAstData.filePath] = fileAstData;
-      } catch (error) {
-        log.error(`Error parsing file ${fullPath}:`, error);
-      }
-    }
-  }
+// Create a parser with Java language support
+export function createJavaParser(): Parser {
+  const parser = new Parser();
+  parser.setLanguage(Java);
+  return parser;
 }
 
-async function main() {
-  const args = process.argv.slice(2);
-  if (args.length < 1) {
-    log.error('Usage: ts-node extractor.ts <maven_project_root_dir> [output_file.json]');
-    process.exit(1);
-  }
-
-  const projectRootDir = path.resolve(args[0]);
-  const outputFilePath = args[1] ? path.resolve(args[1]) : path.resolve(projectRootDir, 'project-data.json');
-
-  if (!await fs.stat(projectRootDir).then(s => s.isDirectory()).catch(() => false)) {
-    log.error(`Error: Project root directory not found: ${projectRootDir}`);
-    process.exit(1);
-  }
-
-  try {
-    parser.setLanguage(Java);
-  } catch (e) {
-    log.error("Failed to set Tree-sitter Java language. Ensure tree-sitter-java.wasm is accessible.", e);
-    log.error("You might need to copy 'tree-sitter.wasm' from 'node_modules/tree-sitter/' and 'tree-sitter-java.wasm' from 'node_modules/tree-sitter-java/wasm/' to your project directory or ensure your NODE_PATH is set up correctly.");
-    process.exit(1);
-  }
-
-
-  const projectData: ProjectData = {};
-  const javaSrcDirs = [
-    path.join(projectRootDir, 'src', 'main', 'java'),
-    path.join(projectRootDir, 'src', 'test', 'java'),
-  ];
-
-  for (const srcDir of javaSrcDirs) {
-    if (await fs.stat(srcDir).then(s => s.isDirectory()).catch(() => false)) {
-      log.info(`Scanning directory: ${srcDir}`);
-
-      await scanDirectory(projectRootDir, srcDir, projectData);
-    } else {
-      log.warn(`Directory not found, skipping: ${srcDir}`);
-    }
-  }
-
-  await fs.mkdir(path.dirname(outputFilePath), { recursive: true });
-
-  await fs.writeFile(outputFilePath, JSON.stringify(projectData, null, 2));
-  log.info(`Project data extracted to: ${outputFilePath}`);
-}
-
-main().catch(log.error);
+// Export the main parsing function and types
+export {
+  parseJavaFile,
+  type FileData,
+  type ProjectData,
+  type ClassInfo,
+  type JavaMethod,
+  type JavaField,
+  type Import,
+  type Type
+};

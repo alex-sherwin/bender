@@ -4,9 +4,9 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "sshd-core": "tsx ./src/extractor.ts /Users/asherwin/repos/bak/mina-sshd/sshd-core ./dist/sshd-core.json",
-    "jsch": "tsx ./src/extractor.ts ../../../bak/jsch ./dist/jsch.json",
-    "extract": "tsx ./src/extractor.ts ../../../bak/tls-helpers ./dist/out.json",
+    "sshd-core": "tsx ./src/main.ts /Users/asherwin/repos/bak/mina-sshd/sshd-core ./dist/sshd-core.json",
+    "jsch": "tsx ./src/main.ts ../../../bak/jsch ./dist/jsch.json",
+    "extract": "tsx ./src/main.ts ../../../bak/tls-helpers ./dist/out.json",
     "extract2": "tsx ./src/extractor.ts /Users/asherwin/repos/bak/tls-helpers ./dist/out.json"
   },
   "dependencies": {
