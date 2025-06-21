@@ -6,13 +6,16 @@
   "scripts": {
     "sshd-core": "tsx ./src/main.ts /Users/asherwin/repos/bak/mina-sshd/sshd-core ./dist/sshd-core.json",
     "jsch": "tsx ./src/main.ts ../../../bak/jsch ./dist/jsch.json",
-    "extract": "tsx ./src/main.ts ../../../bak/tls-helpers ./dist/out.json",
-    "extract2": "tsx ./src/extractor.ts /Users/asherwin/repos/bak/tls-helpers ./dist/out.json"
+    "extract": "tsx ./src/main2.ts /Users/asherwin/repos/bender/test-projects/java ./dist/out.json",
+    "extract2": "tsx ./src/extractor.ts /Users/asherwin/repos/bak/tls-helpers ./dist/out.json",
+    "postinstall": "mkdir -p public && cp node_modules/web-tree-sitter/tree-sitter.wasm ./public/tree-sitter.wasm && cp node_modules/tree-sitter-java/tree-sitter-java.wasm ./public/tree-sitter-java.wasm"
+
   },
   "dependencies": {
     "arktype": "2.1.20",
     "tree-sitter": "0.25.0",
-    "tree-sitter-java": "0.23.5"
+    "tree-sitter-java": "0.23.5",
+    "web-tree-sitter": "0.25.6"
   },
   "devDependencies": {
     "@types/node": "22.15.29",

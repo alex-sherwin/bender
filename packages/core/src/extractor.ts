@@ -1,9 +1,8 @@
-import Parser from 'tree-sitter';
-import JavaImport from 'tree-sitter-java';
+
+import { Parser, Language, Node } from 'web-tree-sitter';
 
 import { log } from "./logger";
 
-const Java = JavaImport as Parser.Language;
 
 interface Type {
   name: string;
@@ -99,6 +98,9 @@ function parseClassNode(classNode: Parser.SyntaxNode, sourceCode: string, fileDa
   // log.debug(`className [${className}]`);
 
   // Extract comment for the class
+  if (className === "ChainedTrustManagerFactory") {
+    log.debug("HERE!");
+  }
   const comment = extractCommentFromNode(classNode, sourceCode);
 
   const classInfo: ClassInfo = { type, name: className, fields: [], methods: [], comment };
@@ -382,12 +384,12 @@ function extractCommentFromNode(targetNode: Parser.SyntaxNode, sourceCode: strin
   if (targetIndex === 0) return undefined;
 
   const comments: string[] = [];
-  
+
   // Check for a single block comment immediately before the target
   const prevSibling = parent.children[targetIndex - 1];
   if (prevSibling && prevSibling.type === 'block_comment') {
     const commentText = getNodeText(prevSibling, sourceCode);
-    
+
     // Clean up block comment text by removing comment markers
     const cleanedComment = commentText
       .replace(/^\/\*\*?/, '')
@@ -397,10 +399,10 @@ function extractCommentFromNode(targetNode: Parser.SyntaxNode, sourceCode: strin
       .filter(line => line.length > 0)
       .join('\n')
       .trim();
-    
+
     return cleanedComment || undefined;
   }
-  
+
   // Check for consecutive line comments before the target
   let currentIndex = targetIndex - 1;
   while (currentIndex >= 0) {
@@ -418,7 +420,7 @@ function extractCommentFromNode(targetNode: Parser.SyntaxNode, sourceCode: strin
       break;
     }
   }
-  
+
   if (comments.length > 0) {
     return comments.join('\n');
   }
@@ -493,11 +495,11 @@ function parsePackageNode(packageNode: Parser.SyntaxNode, sourceCode: string): s
   return nameNode ? getNodeText(nameNode, sourceCode) : '';
 }
 
-function parseImportNode(importNode: Parser.SyntaxNode, sourceCode: string): Import | null {
+function parseImportNode(importNode: Node, sourceCode: string): Import | null {
 
   // Import name can be either identifier or scoped_identifier
   const nameNode = importNode.children.find(child =>
-    child.type === 'identifier' || child.type === 'scoped_identifier'
+    child!.type === 'identifier' || child!.type === 'scoped_identifier'
   );
 
   if (!nameNode) {
@@ -515,7 +517,7 @@ function parseImportNode(importNode: Parser.SyntaxNode, sourceCode: string): Imp
 
 function parseJavaFile(parser: Parser, relativePath: string, fileName: string, sourceCode: string): FileData {
   const tree = parser.parse(sourceCode);
-  const rootNode = tree.rootNode;
+  const rootNode = tree!.rootNode;
 
   const fileData: FileData = {
     filePath: relativePath,
@@ -528,9 +530,9 @@ function parseJavaFile(parser: Parser, relativePath: string, fileName: string, s
   // Iterate through all top-level nodes
   rootNode.children.forEach(node => {
 
-    // console.log(`node.type [${node.type}]`);
+    console.log(`node.type [${node.type}]`);
 
-    switch (node.type) {
+    switch (node!.type) {
 
       case 'package_declaration': {
         fileData.packageName = parsePackageNode(node, sourceCode);
@@ -558,7 +560,7 @@ function parseJavaFile(parser: Parser, relativePath: string, fileName: string, s
       }
 
       default: {
-        log.warn(`Unhandled top-level node type: ${node.type}`);
+        log.warn(`Unhandled top-level node type: ${node!.type}`);
         break;
       }
 
@@ -570,9 +572,15 @@ function parseJavaFile(parser: Parser, relativePath: string, fileName: string, s
 }
 
 // Create a parser with Java language support
-export function createJavaParser(): Parser {
+export async function createJavaParser(): Promise<Parser> {
+
+  await Parser.init();
+
+  const Java = await Language.load('public/tree-sitter-java.wasm');
+
   const parser = new Parser();
   parser.setLanguage(Java);
+
   return parser;
 }
 
