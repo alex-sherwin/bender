@@ -2,52 +2,10 @@ import { Parser, Language, Node, Tree } from 'web-tree-sitter';
 
 import { log } from "./logger";
 
-
-interface Type {
-  name: string;
-  package?: string;
-}
-
-interface JavaMethod {
-  name: string;
-  signature: string;
-  isStatic: boolean;
-  returnType: string;
-  typeReferences: Type[];
-  comment?: string;
-}
-
-interface JavaField {
-  name: string;
-  type: Type;
-  signature: string;
-  static: boolean;
-}
-
-interface ClassInfo {
-  name: string;
-  fields: JavaField[];
-  methods: JavaMethod[];
-  type: "class" | "interface";
-  comment?: string;
-}
-
-interface Import {
-  wildcard: boolean;
-  package: string;
-  type: string;
-}
-
-interface FileData {
-  filePath: string;
-  filename: string;
-  packageName: string | null;
-  imports: Import[];
-  definedClasses: ClassInfo[];
-}
+import type { FileData, ClassInfo, JavaMethod, JavaField, Import, Type } from './types';
 
 
-type ProjectData = Record<string, FileData>;
+
 
 
 export function* traverseTree(
@@ -89,51 +47,17 @@ export function* traverseTree(
 }
 
 /**
- * Extract the package name from a `package_declaration` node.
- * 
- * @author GitHub Copilot
- * @param node The node to check for package declaration
- * @returns 
- */
-export function getPackage(node: Node): string | null {
-
-  if (node.type !== "package_declaration") {
-    return null;
-  }
-
-  let packageName = "";
-
-  // Walk through all child nodes and concatenate identifier and "." tokens
-  function collectPackageParts(currentNode: Node) {
-    for (let i = 0; i < currentNode.childCount; i++) {
-      const child = currentNode.child(i);
-      if (child) {
-        if (child.type === "identifier" || child.type === ".") {
-          packageName += child.text;
-        } else if (child.type === ";") {
-          // Stop when we hit the semicolon
-          return;
-        } else {
-          // Recursively check child nodes (like scoped_identifier)
-          collectPackageParts(child);
-        }
-      }
-    }
-  }
-
-  collectPackageParts(node);
-
-  return packageName ?? null;
-}
-
-/**
  * Find the first node of a specific type in the syntax tree.
  * 
  * @author GitHub Copilot
  * @param node The root node to start searching from
  * @returns The first node of the specified type, or null if not found
  */
-export function findFirstNodeOfType(target: Node | Tree, type: string): Node | null {
+export function findFirstNodeOfType(target: Node | Tree | null | undefined, type: string): Node | null {
+
+  if (!target) {
+    return null;
+  }
 
   const node = target instanceof Tree ? target.rootNode as Node : target;
 
@@ -147,8 +71,107 @@ export function findFirstNodeOfType(target: Node | Tree, type: string): Node | n
 
 }
 
+/**
+ * Find the last node of a specific type in the syntax tree.
+ * 
+ * @author GitHub Copilot
+ * @param node The root node to start searching from
+ * @returns The last node of the specified type, or null if not found
+ */
+export function findLastNodeOfType(target: Node | Tree | null | undefined, type: string): Node | null {
 
-export function parseJavaFile(parser: Parser, relativePath: string, fileName: string, sourceCode: string): FileData | null {
+  if (!target) {
+    return null;
+  }
+
+  const node = target instanceof Tree ? target.rootNode as Node : target;
+
+  if (node.type === type) {
+    return node;
+  }
+
+  const results = node.descendantsOfType(type);
+
+  return results.at(-1) ?? null;
+
+}
+
+/**
+ * Get all imports from a given AST node.
+ * @param node Finds all `import_declaration` nodes in the provided AST node and returns an array of {@link Import} models.
+ * @returns An array of {@link Import} models representing the imports found in the node.
+ */
+export function getImports(node: Node): Import[] {
+  const importDeclarations = node.descendantsOfType("import_declaration");
+  const imports = importDeclarations.map(getImport).filter(o => o !== null);
+  return imports;
+}
+
+/**
+ * Get a populated {@link Import} model from a {@link Node} representing an import declaration.
+ * 
+ * @param node A `import_declaration` {@link Node} from the AST
+ * @returns The populated {@link Import} model or null if the node is not an import declaration
+ */
+export function getImport(node: Node | null | undefined): Import | null {
+
+  if (node?.type !== "import_declaration") {
+    return null;
+  }
+
+  const wildcard = findFirstNodeOfType(node, "asterisk") !== null;
+  const simpleType = wildcard ? "*" : findLastNodeOfType(node, "identifier")?.text ?? null;
+  let fullType = findFirstNodeOfType(node, "scoped_identifier")?.text ?? null;
+
+  if (!simpleType) {
+    throw new Error("Could not determine simple type from import_declaration node");
+  }
+
+  let pkg = null;
+
+  if (fullType && wildcard) {
+    pkg = fullType;
+  } else if (fullType && !wildcard) {
+    pkg = fullType.substring(0, fullType.lastIndexOf(`.${simpleType}`));
+  } else {
+    throw new Error("Could not determine package from import_declaration node");
+  }
+
+  if (fullType && wildcard) {
+    fullType = `${fullType}.*`;
+  }
+
+  return {
+    type: simpleType,
+    pkg,
+    wildcard
+  };
+
+}
+
+/**
+ * Get the fully qualified import from a node.  
+ * 
+ * The provided {@link Node} should be a `import_declaration` node.
+ * 
+ * @param node A `import_declaration` {@link Node} from the AST
+ * @returns The fully qualified import as a string, or null if not found
+ */
+export function getFullyQualifiedImport(node: Node): string | null {
+  return findFirstNodeOfType(node!, "scoped_identifier")?.text ?? null;
+}
+
+/**
+ * Get the package name from a given Java file
+ * 
+ * @param tree A {@link Tree} representing the Java file
+ * @returns The package name of the Java file, or null if not found
+ */
+export function getFilePackage(tree: Tree): string | null {
+  return findFirstNodeOfType(findFirstNodeOfType(tree, "package_declaration"), "scoped_identifier")?.text ?? null;
+}
+
+export function parseJavaFile(parser: Parser, relativePath: string, filename: string, sourceCode: string): FileData | null {
 
   const tree: Tree | null = parser.parse(sourceCode);
 
@@ -156,31 +179,31 @@ export function parseJavaFile(parser: Parser, relativePath: string, fileName: st
     return null;
   }
 
-  const generator = traverseTree(tree);
+  const pkg = getFilePackage(tree);
+  const imports = getImports(tree.rootNode);
 
-  for (const node of generator) {
-    // log.info(`Visited node: ${node.type} at (${node.startPosition.row}, ${node.startPosition.column})`);
+  // const generator = traverseTree(tree);
 
-    if (node.type === "package_declaration") {
-      log.info(`Found package declaration: ${node.text}`);
-    }
+  // for (const node of generator) {
+  //   // log.info(`Visited node: ${node.type} at (${node.startPosition.row}, ${node.startPosition.column})`);
 
-    if (node.type === "package") {
-      log.info(`Found package: ${node.text}`);
-    }
+  //   if (node.type === "package_declaration") {
+  //     log.info(`Found package declaration: ${node.text}`);
+  //   }
 
-  }
+  //   if (node.type === "package") {
+  //     log.info(`Found package: ${node.text}`);
+  //   }
 
-  const rootNode = tree!.rootNode;
+  // }
 
   const fileData: FileData = {
     filePath: relativePath,
-    filename: fileName,
-    packageName: null,
-    imports: [],
+    filename,
+    pkg,
+    imports,
     definedClasses: [],
   };
-
 
   return fileData;
 }
@@ -198,35 +221,11 @@ export async function createJavaParser(): Promise<Parser> {
   return parser;
 }
 
-// Export the main parsing function and types
-export {
-  type FileData,
-  type ProjectData,
-  type ClassInfo,
-  type JavaMethod,
-  type JavaField,
-  type Import,
-  type Type
-};
-
-/**
- * Get the fully qualified import from a node.  
- * 
- * The provided {@link Node} should be a `import_declaration` node.
- * 
- * @param node A `import_declaration` {@link Node} from the AST
- * @returns The fully qualified import as a string, or null if not found
- */
-export function getFullyQualifiedImport(node: Node): string | null {
-  return findFirstNodeOfType(node!, "scoped_identifier")?.text ?? null;
-}
-
-
 // Helper function to get text of a node
-function getNodeText(node: Node | null | undefined, sourceCode: string): string {
-  if (!node) return '';
-  return sourceCode.substring(node.startIndex, node.endIndex);
-}
+// function getNodeText(node: Node | null | undefined, sourceCode: string): string {
+//   if (!node) return '';
+//   return sourceCode.substring(node.startIndex, node.endIndex);
+// }
 
 
 /**

@@ -1,38 +1,30 @@
 import { describe, it, expect } from 'vitest';
 
-import { parseJavaFile, createJavaParser, getPackage, traverseTree, findFirstNodeOfType, getFullyQualifiedImport } from "../src/extractor2";
+import { getImports, findLastNodeOfType, parseJavaFile, createJavaParser, traverseTree, findFirstNodeOfType, getFullyQualifiedImport, getFilePackage } from "../src/extractor2";
+import type { Import } from '../src/types';
 
 
 describe('extractor', () => {
 
-  it('package declaration should be package only', async () => {
+  it('getImports', async () => {
 
     const parser = await createJavaParser();
     const tree = parser.parse(`
 package com.example.test;
 
+import javax.net.ssl.TrustManager;
+import javax.net.ssl.X509TrustManager;
+import javax.net.wild.*;
+
 public class Test { }
 `)!;
 
-    const gen = traverseTree(tree);
+    const imports = getImports(tree.rootNode);
 
-
-
-    let packageName: string | null = null;
-
-    for (const node of gen) {
-      if (node.type === "package_declaration") {
-        packageName = getPackage(node);
-      }
-    }
-
-    expect(packageName).toEqual("com.example.test");
-
-    //     parseJavaFile(parser, 'src/test/Test.java', 'Test.java', `
-    // package com.example.test;
-
-    // public class Test { }
-    // `);
+    expect(imports).toHaveLength(3);
+    expect(imports[0]).toEqual({ pkg: "javax.net.ssl", type: "TrustManager", wildcard: false } satisfies Import);
+    expect(imports[1]).toEqual({ pkg: "javax.net.ssl", type: "X509TrustManager", wildcard: false } satisfies Import);
+    expect(imports[2]).toEqual({ pkg: "javax.net.wild", type: "*", wildcard: true } satisfies Import);
 
   });
 
@@ -99,6 +91,22 @@ public class Test { }
     expect(node?.type).toEqual("import_declaration")
 
     expect(getFullyQualifiedImport(node!)).toEqual("javax.net.ssl.TrustManager");
+
+  });
+
+  it('getFullyQualifiedImport', async () => {
+
+    const parser = await createJavaParser();
+    const tree = parser.parse(`
+package com.example.test;
+
+import javax.net.ssl.TrustManager;
+import javax.net.ssl.X509TrustManager;
+
+public class Test { }
+`)!;
+
+    expect(getFilePackage(tree)).toEqual("com.example.test");
 
   });
 

@@ -1,7 +1,8 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { log } from "./logger";
-import { createJavaParser, parseJavaFile, type ProjectData } from "./extractor2";
+import { createJavaParser, parseJavaFile } from "./extractor2";
+import { type ProjectData } from "./types";
 
 async function scanDirectory(projectRootDir: string, dirPath: string, projectData: ProjectData): Promise<void> {
   const parser = await createJavaParser();
@@ -18,7 +19,9 @@ async function scanDirectory(projectRootDir: string, dirPath: string, projectDat
         const fileName = path.basename(fullPath);
         log.warn(`projectRootDir [${projectRootDir}]`);
         const fileAstData = await parseJavaFile(parser, relativePath, fileName, content);
-        projectData[fileAstData.filePath] = fileAstData;
+        if (fileAstData) {
+          projectData[fileAstData.filePath] = fileAstData;
+        }
       } catch (error) {
         log.error(`Error parsing file ${fullPath}:`, error);
       }
