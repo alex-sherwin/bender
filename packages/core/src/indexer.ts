@@ -9,6 +9,7 @@ import { getParserForFile, detectLanguage } from './parsers';
 import { log } from './logger';
 import type { ParsedFileData as ParserParsedFileData } from './parsers/types';
 import type { ParsedFileData as DbParsedFileData, SymbolData, ReferenceData, ImportData } from './db/types';
+import type { SupportedLanguage } from './cli/args-parser';
 
 /**
  * Convert parser ParsedFileData to database ParsedFileData format
@@ -92,11 +93,30 @@ function convertParsedFileData(input: ParserParsedFileData, rootDir: string): Db
 /**
  * Recursively find all supported files in a directory
  * @param dirPath Directory to scan
+ * @param targetLanguages Set of languages to filter by
  * @returns Array of file paths
  * @author GitHub Copilot
  */
-async function findSupportedFiles(dirPath: string): Promise<string[]> {
-  const supportedExtensions = new Set(['.java', '.ts', '.tsx', '.cs', '.sh']);
+async function findSupportedFiles(dirPath: string, targetLanguages: Set<SupportedLanguage>): Promise<string[]> {
+  const supportedExtensions = new Set<string>();
+
+  // Build extension set based on target languages
+  if (targetLanguages.has('typescript')) {
+    supportedExtensions.add('.ts');
+  }
+  if (targetLanguages.has('tsx')) {
+    supportedExtensions.add('.tsx');
+  }
+  if (targetLanguages.has('java')) {
+    supportedExtensions.add('.java');
+  }
+  if (targetLanguages.has('bash')) {
+    supportedExtensions.add('.sh');
+  }
+  if (targetLanguages.has('csharp')) {
+    supportedExtensions.add('.cs');
+  }
+
   const files: string[] = [];
 
   async function scanDir(currentPath: string): Promise<void> {
@@ -128,9 +148,22 @@ async function findSupportedFiles(dirPath: string): Promise<string[]> {
  * @param dirPath Directory to index
  * @param dbPath Path to SQLite database
  * @param description Optional snapshot description
+ * @param languages Optional set of languages to index. If undefined, all 5 languages are indexed.
  * @author GitHub Copilot
  */
-export async function indexDirectory(dirPath: string, dbPath: string, description?: string): Promise<void> {
+export async function indexDirectory(
+  dirPath: string,
+  dbPath: string,
+  description?: string,
+  languages?: Set<SupportedLanguage>
+): Promise<void> {
+  // Setup target languages - default to all languages if not specified
+  const targetLanguages: Set<SupportedLanguage> = languages ?? new Set(['typescript', 'tsx', 'java', 'bash', 'csharp']);
+
+  // Log which languages are being indexed
+  const languageList = Array.from(targetLanguages).sort().join(', ');
+  log.info(`Indexing with languages: ${languageList}`);
+
   log.info(`Starting indexing of directory: ${dirPath}`);
 
   // Initialize database and create snapshot
@@ -139,7 +172,7 @@ export async function indexDirectory(dirPath: string, dbPath: string, descriptio
   log.info(`Created snapshot: ${snapshotId}`);
 
   // Find all supported files
-  const files = await findSupportedFiles(dirPath);
+  const files = await findSupportedFiles(dirPath, targetLanguages);
   log.info(`Found ${files.length} supported files`);
 
   let indexedFiles = 0;
