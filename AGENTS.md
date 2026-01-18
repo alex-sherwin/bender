@@ -2,10 +2,16 @@
 
 Guide for agentic coding agents working in this repository.
 
+## Doc references
+
+* Bun `parseArgs` in @docs/BUN_parseArgs.md
+
 ## Project Structure
 
 Monorepo using pnpm workspaces. Main package:
 - `packages/core`: Multi-language code indexer using tree-sitter and SQLite
+
+
 
 ### New File Structure
 - `src/parsers/`: Language-specific parsers (Java, TypeScript, TSX, C#, Bash)
@@ -37,6 +43,48 @@ bun test filter_here
 
 **Linting:**
 OxLint is configured (.oxlintrc.json is empty, using defaults). Run via IDE integration or build tools.
+
+### Language Filtering
+
+The indexer now supports filtering by language when indexing:
+
+**Index only TypeScript files:**
+```bash
+bun run index ./my-ts-project ./project.db --typescript
+```
+
+**Index TypeScript and Bash together:**
+```bash
+bun run index ./my-project ./project.db --typescript --bash
+```
+
+**Index all supported languages (default):**
+```bash
+bun run index ./my-project ./project.db --all-langs
+```
+
+Supported language flags:
+- `--typescript`: TypeScript files (.ts) - also includes .tsx files
+- `--tsx`: TSX/JSX files (.tsx) - can be used separately for clarity
+- `--java`: Java files (.java)
+- `--bash`: Bash scripts (.sh)
+- `--csharp`: C# files (.cs)
+- `--all-langs`: All of the above (default if no flags specified)
+
+Multiple flags can be combined:
+```bash
+bun run index ./mixed ./db.sqlite --typescript --bash --java
+```
+
+Example: Index a TypeScript project with related Bash scripts:
+```bash
+bun run index ./src ./project.db "TypeScript snapshot" --typescript --bash
+```
+
+Then query the index:
+```bash
+bun run query blast-radius "src/services/user.ts:UserService.saveUser" 3
+```
 
 ## Runtime Environment
 
