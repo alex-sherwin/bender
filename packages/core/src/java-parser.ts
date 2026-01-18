@@ -240,7 +240,7 @@ export function getJavaMethodInfo(methodNode: Node): JavaMethod | null {
     static: isStatic,
     signature: methodNode.text,
     typeReferences: [],
-    comment: null,
+    comment: undefined,
   };
 }
 
