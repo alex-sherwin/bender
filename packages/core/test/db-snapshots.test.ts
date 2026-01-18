@@ -178,8 +178,8 @@ describe('Database Snapshots', () => {
         { from_qualified_name: 'com.example.Test.method1', to_qualified_name: 'System.out.println', ref_kind: 'call' },
       ],
       imports: [
-        { source_package: 'java.util.List', wildcard: false, _names: ['List'] },
-        { source_package: 'java.io', wildcard: true, _names: [] },
+        { source_package: 'java.util.List', wildcard: false, imported_names: ['List'] },
+        { source_package: 'java.io', wildcard: true, imported_names: [] },
       ],
     };
     writeParsedFile(db, snapshot, parsedData);
