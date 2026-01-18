@@ -8,13 +8,15 @@
     "jsch": "tsx ./src/main.ts ../../../bak/jsch ./dist/jsch.json",
     "extract": "tsx ./src/main2.ts /Users/asherwin/repos/bender/test-projects/java ./dist/out.json",
     "extract2": "tsx ./src/extractor.ts /Users/asherwin/repos/bak/tls-helpers ./dist/out.json",
-    "postinstall": "mkdir -p public && cp node_modules/web-tree-sitter/web-tree-sitter.wasm ./public/web-tree-sitter.wasm && cp node_modules/tree-sitter-java/tree-sitter-java.wasm ./public/tree-sitter-java.wasm && cp node_modules/tree-sitter-typescript/tree-sitter-typescript.wasm ./public/tree-sitter-typescript.wasm && cp node_modules/tree-sitter-typescript/tree-sitter-tsx.wasm ./public/tree-sitter-tsx.wasm",
+    "postinstall": "mkdir -p public && cp node_modules/web-tree-sitter/web-tree-sitter.wasm ./public/web-tree-sitter.wasm && cp node_modules/tree-sitter-java/tree-sitter-java.wasm ./public/tree-sitter-java.wasm && cp node_modules/tree-sitter-typescript/tree-sitter-typescript.wasm ./public/tree-sitter-typescript.wasm && cp node_modules/tree-sitter-typescript/tree-sitter-tsx.wasm ./public/tree-sitter-tsx.wasm && cp node_modules/tree-sitter-c-sharp/tree-sitter-c_sharp.wasm ./public/tree-sitter-c_sharp.wasm && cp node_modules/tree-sitter-bash/tree-sitter-bash.wasm ./public/tree-sitter-bash.wasm",
     "test": "vitest --run",
     "test:watch": "vitest"
   },
   "dependencies": {
     "arktype": "2.1.29",
     "tree-sitter": "0.25.0",
+    "tree-sitter-bash": "0.25.1",
+    "tree-sitter-c-sharp": "0.23.1",
     "tree-sitter-java": "0.23.5",
     "tree-sitter-typescript": "0.23.2",
     "web-tree-sitter": "0.26.3"
