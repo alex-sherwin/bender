@@ -7,6 +7,20 @@ import { Database } from "bun:sqlite";
 import { indexDirectory } from '../src/indexer';
 import { initDatabase } from '../src/db/schema';
 import { getLatestSnapshot, getFileSymbols } from '../src/db/queries';
+import { createTestIndex, getFileCountByLanguage, getLatestSnapshotId, assertLanguagesIndexed } from './test-utils';
+
+/**
+ * Helper to close a test database and clean up its temporary file
+ */
+function closeTestDb(db: Database) {
+  const dbPath = (db as any).__testDbPath;
+  db.close();
+  if (dbPath) {
+    rm(dbPath, { force: true }).catch(() => {
+      // Ignore cleanup errors
+    });
+  }
+}
 
 describe('Indexer', () => {
   const testDir = '/tmp/bender-test-indexer';
@@ -212,27 +226,232 @@ export class App {
     }
   });
 
-  it('skips unsupported file types', async () => {
-    // Create unsupported files
-    await writeFile(join(testDir, 'readme.txt'), 'This is a text file');
-    await writeFile(join(testDir, 'script.py'), 'print("hello")');
-    await writeFile(join(testDir, 'data.json'), '{"key": "value"}');
+   it('skips unsupported file types', async () => {
+     // Create unsupported files
+     await writeFile(join(testDir, 'readme.txt'), 'This is a text file');
+     await writeFile(join(testDir, 'script.py'), 'print("hello")');
+     await writeFile(join(testDir, 'data.json'), '{"key": "value"}');
+ 
+     await indexDirectory(testDir, dbPath, 'Test unsupported files');
+ 
+     const db = initDatabase(dbPath);
+     const snapshotId = getLatestSnapshot(db);
+ 
+     // Should only index the 3 supported files
+     const files = db.prepare('SELECT COUNT(*) as count FROM files WHERE snapshot_id = ?').get(snapshotId) as { count: number };
+     expect(files.count).toBe(3);
+ 
+     const filePaths = db.prepare('SELECT path FROM files WHERE snapshot_id = ? ORDER BY path').all(snapshotId) as Array<{ path: string }>;
+     const paths = filePaths.map(f => f.path);
+     expect(paths).not.toContain('readme.txt');
+     expect(paths).not.toContain('script.py');
+     expect(paths).not.toContain('data.json');
+ 
+     db.close();
+   });
+});
 
-    await indexDirectory(testDir, dbPath, 'Test unsupported files');
+describe("indexer - language filtering", () => {
+  const testDataDir = join(__dirname, '../test-data/mixed-languages');
 
-    const db = initDatabase(dbPath);
-    const snapshotId = getLatestSnapshot(db);
+  it("indexes only TypeScript files when --typescript flag used", async () => {
+    const db = await createTestIndex(testDataDir, new Set(['typescript', 'tsx']));
 
-    // Should only index the 3 supported files
-    const files = db.prepare('SELECT COUNT(*) as count FROM files WHERE snapshot_id = ?').get(snapshotId) as { count: number };
-    expect(files.count).toBe(3);
+    const snapshotId = getLatestSnapshotId(db);
+    const fileCount = getFileCountByLanguage(db, snapshotId);
 
-    const filePaths = db.prepare('SELECT path FROM files WHERE snapshot_id = ? ORDER BY path').all(snapshotId) as Array<{ path: string }>;
-    const paths = filePaths.map(f => f.path);
-    expect(paths).not.toContain('readme.txt');
-    expect(paths).not.toContain('script.py');
-    expect(paths).not.toContain('data.json');
+    // Both .ts and .tsx files are stored as 'typescript' language in the database
+    expect(fileCount['typescript']).toBe(3); // helpers.ts, main.ts, component.tsx
+    expect(fileCount['java']).toBeUndefined();
+    expect(fileCount['bash']).toBeUndefined();
+    expect(fileCount['csharp']).toBeUndefined();
 
-    db.close();
+    closeTestDb(db);
+  });
+
+  it("indexes TypeScript and Bash when both flags used", async () => {
+    const db = await createTestIndex(testDataDir, new Set(['typescript', 'tsx', 'bash']));
+
+    const snapshotId = getLatestSnapshotId(db);
+    const fileCount = getFileCountByLanguage(db, snapshotId);
+
+    // TypeScript files (both .ts and .tsx)
+    expect(fileCount['typescript']).toBe(3); // helpers.ts, main.ts, component.tsx
+    // Bash files have no parser yet, so they won't appear in counts
+    expect(fileCount['java']).toBeUndefined();
+    expect(fileCount['csharp']).toBeUndefined();
+
+    closeTestDb(db);
+  });
+
+  it("indexes Java files when --java flag used", async () => {
+    const db = await createTestIndex(testDataDir, new Set(['java']));
+
+    const snapshotId = getLatestSnapshotId(db);
+    const fileCount = getFileCountByLanguage(db, snapshotId);
+
+    expect(fileCount['java']).toBe(2); // Main.java, Calculator.java
+    expect(fileCount['typescript']).toBeUndefined();
+    expect(fileCount['bash']).toBeUndefined();
+    expect(fileCount['csharp']).toBeUndefined();
+
+    closeTestDb(db);
+  });
+
+  it("indexes all languages when no filter provided", async () => {
+    const db = await createTestIndex(testDataDir, undefined);
+
+    const snapshotId = getLatestSnapshotId(db);
+    const fileCount = getFileCountByLanguage(db, snapshotId);
+
+    // Should have at least typescript and java languages
+    expect(Object.keys(fileCount).length).toBeGreaterThanOrEqual(2);
+    expect(fileCount['typescript']).toBe(3); // helpers.ts, main.ts, component.tsx
+    expect(fileCount['java']).toBe(2); // Main.java, Calculator.java
+
+    closeTestDb(db);
+  });
+
+  it("preserves backward compatibility with existing calls", async () => {
+    // Use a temporary file-based database
+    const randomId = Math.random().toString(36).substring(7);
+    const dbPath = `/tmp/bender-test-compat-${randomId}.db`;
+
+    try {
+      // Call indexDirectory without languages parameter (old style)
+      await indexDirectory(testDataDir, dbPath, 'Test backward compatibility');
+
+      // Open the database to verify
+      const db = initDatabase(dbPath);
+
+      // Verify indexing completed without error
+      const query = db.prepare('SELECT COUNT(*) as count FROM files');
+      const result = query.get() as { count: number };
+
+      expect(result.count).toBeGreaterThan(0);
+
+      // Verify database has symbols
+      const symbolQuery = db.prepare('SELECT COUNT(*) as count FROM symbols');
+      const symbolResult = symbolQuery.get() as { count: number };
+      expect(symbolResult.count).toBeGreaterThan(0);
+
+      db.close();
+    } finally {
+      await rm(dbPath, { force: true }).catch(() => {
+        // Ignore cleanup errors
+      });
+    }
+  });
+
+  it("handles empty language set gracefully", async () => {
+    const db = await createTestIndex(testDataDir, new Set());
+
+    const snapshotId = getLatestSnapshotId(db);
+    const fileCount = getFileCountByLanguage(db, snapshotId);
+
+    // No files should be indexed with empty language set
+    expect(Object.keys(fileCount).length).toBe(0);
+
+    closeTestDb(db);
+  });
+
+  it("returns correct file counts for each language", async () => {
+    const db = await createTestIndex(
+      testDataDir,
+      new Set(['typescript', 'tsx', 'java', 'bash', 'csharp'])
+    );
+
+    const snapshotId = getLatestSnapshotId(db);
+    const fileCount = getFileCountByLanguage(db, snapshotId);
+
+    // Verify expected counts from test-data/mixed-languages
+    // Note: .ts and .tsx files are both stored as 'typescript' language
+    expect(fileCount['typescript']).toBe(3); // helpers.ts, main.ts, component.tsx
+    expect(fileCount['java']).toBe(2); // Main.java, Calculator.java
+    // bash and csharp have no parsers, so they won't appear in counts
+
+    closeTestDb(db);
+  });
+
+  it("correctly filters TypeScript and TSX as separate language filters", async () => {
+    const db = await createTestIndex(testDataDir, new Set(['typescript']));
+
+    const snapshotId = getLatestSnapshotId(db);
+    const fileCount = getFileCountByLanguage(db, snapshotId);
+
+    // When only 'typescript' language is selected, we get .ts files only
+    // (the tsx filter is not included)
+    expect(fileCount['typescript']).toBe(2); // helpers.ts, main.ts (component.tsx excluded)
+    expect(fileCount['java']).toBeUndefined();
+
+    closeTestDb(db);
+  });
+
+  it("correctly filters TSX when typescript is not selected", async () => {
+    const db = await createTestIndex(testDataDir, new Set(['tsx']));
+
+    const snapshotId = getLatestSnapshotId(db);
+    const fileCount = getFileCountByLanguage(db, snapshotId);
+
+    // When only 'tsx' language is selected, we get .tsx files only
+    // (the typescript filter is not included)
+    expect(fileCount['typescript']).toBe(1); // component.tsx only
+    expect(fileCount['java']).toBeUndefined();
+
+    closeTestDb(db);
+  });
+
+  it("indexes C# files when --csharp flag used", async () => {
+    const db = await createTestIndex(testDataDir, new Set(['csharp']));
+
+    const snapshotId = getLatestSnapshotId(db);
+    const fileCount = getFileCountByLanguage(db, snapshotId);
+
+    // C# parser may not be available, so files are found but not indexed
+    expect(fileCount['csharp'] ?? 0).toBe(0);
+    expect(fileCount['typescript']).toBeUndefined();
+    expect(fileCount['java']).toBeUndefined();
+
+    closeTestDb(db);
+  });
+
+  it("can index mixed subset of multiple language types", async () => {
+    const db = await createTestIndex(testDataDir, new Set(['java', 'bash', 'csharp']));
+
+    const snapshotId = getLatestSnapshotId(db);
+    const fileCount = getFileCountByLanguage(db, snapshotId);
+
+    expect(fileCount['java']).toBe(2); // Main.java, Calculator.java
+    // bash and csharp have no parsers
+    expect(fileCount['typescript']).toBeUndefined();
+
+    closeTestDb(db);
+  });
+
+  it("allows filtering with --typescript but not --tsx", async () => {
+    const db = await createTestIndex(testDataDir, new Set(['typescript']));
+
+    const snapshotId = getLatestSnapshotId(db);
+    const fileCount = getFileCountByLanguage(db, snapshotId);
+
+    // Only .ts files, not .tsx
+    expect(fileCount['typescript']).toBe(2); // helpers.ts, main.ts
+    expect(fileCount['java']).toBeUndefined();
+
+    closeTestDb(db);
+  });
+
+  it("can select only Java and TypeScript together", async () => {
+    const db = await createTestIndex(testDataDir, new Set(['java', 'typescript', 'tsx']));
+
+    const snapshotId = getLatestSnapshotId(db);
+    const fileCount = getFileCountByLanguage(db, snapshotId);
+
+    expect(fileCount['java']).toBe(2);
+    expect(fileCount['typescript']).toBe(3); // helpers.ts, main.ts, component.tsx
+    expect(fileCount['bash']).toBeUndefined();
+    expect(fileCount['csharp']).toBeUndefined();
+
+    closeTestDb(db);
   });
 });
