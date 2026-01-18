@@ -2,12 +2,16 @@ import { Database } from "bun:sqlite";
 import { initDatabase } from "../src/db/schema";
 import { indexDirectory } from "../src/indexer";
 import type { SupportedLanguage } from "../src/cli/args-parser";
+import { randomBytes } from "node:crypto";
+import { rm } from "node:fs/promises";
 
 /**
- * Create a test database with in-memory storage and index a source directory.
+ * Create a test database with file-based storage and index a source directory.
  *
- * This helper creates a fresh in-memory SQLite database, initializes the schema,
+ * This helper creates a temporary SQLite database file, initializes the schema,
  * and indexes the specified directory with the given language filters.
+ * The database is persisted to a temporary file during indexing and can be
+ * queried afterward.
  *
  * @param sourceDir The directory to index
  * @param languages Optional set of languages to index. If undefined, all languages are indexed.
@@ -17,8 +21,19 @@ export async function createTestIndex(
   sourceDir: string,
   languages?: Set<SupportedLanguage>,
 ): Promise<Database> {
-  const db = initDatabase(":memory:");
-  await indexDirectory(sourceDir, ":memory:", undefined, languages);
+  // Create a unique temporary database path
+  const randomId = randomBytes(8).toString('hex');
+  const dbPath = `/tmp/bender-test-${randomId}.db`;
+  
+  // Index the directory (this creates and initializes the database)
+  await indexDirectory(sourceDir, dbPath, undefined, languages);
+  
+  // Open the database to access the indexed data
+  const db = initDatabase(dbPath);
+  
+  // Store the path for cleanup in the database object
+  (db as any).__testDbPath = dbPath;
+  
   return db;
 }
 
