@@ -42,3 +42,70 @@ export interface FileData {
 }
 
 export type ProjectData = Record<string, FileData>;
+
+// TypeScript-specific types
+export interface TypeScriptParameter {
+  name: string;
+  type: string;
+  optional: boolean;
+}
+
+export interface TypeScriptFunction {
+  name: string;
+  signature: string;
+  returnType: string;
+  parameters: TypeScriptParameter[];
+  comment?: string;
+}
+
+export interface TypeScriptInterfaceMember {
+  name: string;
+  type: string;
+  optional: boolean;
+  comment?: string;
+}
+
+export interface TypeScriptInterface {
+  name: string;
+  members: TypeScriptInterfaceMember[];
+  comment?: string;
+}
+
+export interface TypeScriptType {
+  name: string;
+  members: TypeScriptInterfaceMember[];
+  comment?: string;
+}
+
+export interface TypeScriptClass {
+  name: string;
+  methods: TypeScriptFunction[];
+  properties: TypeScriptInterfaceMember[];
+  comment?: string;
+}
+
+export interface TypeScriptFileData {
+  filePath: string;
+  filename: string;
+  interfaces: TypeScriptInterface[];
+  types: TypeScriptType[];
+  classes: TypeScriptClass[];
+  functions: TypeScriptFunction[];
+  imports: Import[];
+}
+
+// JSX/TSX-specific types
+export interface JsxAttribute {
+  name: string;
+  value?: string;
+}
+
+export interface JsxElement {
+  tag: string;
+  attributes: JsxAttribute[];
+  children: (JsxElement | string)[];
+  selfClosing: boolean;
+  text: string;
+}
+
+

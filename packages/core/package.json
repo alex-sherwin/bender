@@ -8,7 +8,7 @@
     "jsch": "tsx ./src/main.ts ../../../bak/jsch ./dist/jsch.json",
     "extract": "tsx ./src/main2.ts /Users/asherwin/repos/bender/test-projects/java ./dist/out.json",
     "extract2": "tsx ./src/extractor.ts /Users/asherwin/repos/bak/tls-helpers ./dist/out.json",
-    "postinstall": "mkdir -p public && cp node_modules/web-tree-sitter/web-tree-sitter.wasm ./public/web-tree-sitter.wasm && cp node_modules/tree-sitter-java/tree-sitter-java.wasm ./public/tree-sitter-java.wasm",
+    "postinstall": "mkdir -p public && cp node_modules/web-tree-sitter/web-tree-sitter.wasm ./public/web-tree-sitter.wasm && cp node_modules/tree-sitter-java/tree-sitter-java.wasm ./public/tree-sitter-java.wasm && cp node_modules/tree-sitter-typescript/tree-sitter-typescript.wasm ./public/tree-sitter-typescript.wasm && cp node_modules/tree-sitter-typescript/tree-sitter-tsx.wasm ./public/tree-sitter-tsx.wasm",
     "test": "vitest --run",
     "test:watch": "vitest"
   },
@@ -16,12 +16,13 @@
     "arktype": "2.1.29",
     "tree-sitter": "0.25.0",
     "tree-sitter-java": "0.23.5",
+    "tree-sitter-typescript": "0.23.2",
     "web-tree-sitter": "0.26.3"
   },
   "devDependencies": {
     "@types/node": "24.10.9",
     "oxlint": "1.39.0",
-    "tsx": "4.20.6",
+    "tsx": "4.21.0",
     "typescript": "5.9.3",
     "vite": "npm:rolldown-vite@7.3.1",
     "vitest": "4.0.17"
