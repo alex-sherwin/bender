@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { log } from "./logger";
-import { createJavaParser, parseJavaFile } from "./extractor2";
+import { createJavaParser, parseJavaFile } from "./java-parser";
 import { type ProjectData } from "./types";
 
 async function scanDirectory(projectRootDir: string, dirPath: string, projectData: ProjectData): Promise<void> {

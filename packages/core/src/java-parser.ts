@@ -162,21 +162,201 @@ export function getFieldNameValueForNode(node: Node, fieldName: string): string 
 
 export function getClass(walker: Walker): ClassInfo | null {
 
-  if (walker.current.type !== "class_declaration" && walker.current.type !== "interface_declaration") {
+   if (walker.current.type !== "class_declaration" && walker.current.type !== "interface_declaration") {
+     return null;
+   }
+
+   const name = getRequiredFieldNameValueForNode(walker.current, "name");
+   const comment = getBlockCommentForCurrentNode(walker);
+   const type: ClassInfo["type"] = walker.current.type === "class_declaration" ? "class" : "interface";
+
+   return {
+     name,
+     fields: [],
+     methods: [],
+     type,
+     comment,
+   }
+}
+
+/**
+ * Get all Java methods from a class or interface node.
+ * 
+ * @param classNode A `class_declaration` or `interface_declaration` node
+ * @returns An array of {@link JavaMethod} models representing the methods found
+ */
+export function getJavaMethods(classNode: Node): JavaMethod[] {
+  const methods: JavaMethod[] = [];
+  
+  if (classNode.type !== "class_declaration" && classNode.type !== "interface_declaration") {
+    return methods;
+  }
+
+  const methodDeclarations = classNode.descendantsOfType("method_declaration");
+  
+  for (const methodNode of methodDeclarations) {
+    const method = getJavaMethodInfo(methodNode);
+    if (method) {
+      methods.push(method);
+    }
+  }
+  
+  return methods;
+}
+
+/**
+ * Extract a single Java method from a method_declaration node.
+ * 
+ * @param methodNode A `method_declaration` node from the AST
+ * @returns The populated {@link JavaMethod} model or null if extraction fails
+ */
+export function getJavaMethodInfo(methodNode: Node): JavaMethod | null {
+  if (methodNode.type !== "method_declaration") {
     return null;
   }
 
-  const name = getRequiredFieldNameValueForNode(walker.current, "name");
-  const comment = getBlockCommentForCurrentNode(walker);
-  const type: ClassInfo["type"] = walker.current.type === "class_declaration" ? "class" : "interface";
+  const nameNode = methodNode.childForFieldName("name");
+  if (!nameNode) {
+    return null;
+  }
+
+  const name = nameNode.text;
+  const returnTypeNode = methodNode.childForFieldName("type");
+  const returnType = returnTypeNode?.text ?? "void";
+  
+  // Check for modifiers to determine if static
+  let isStatic = false;
+  const modifierNodes = methodNode.descendantsOfType("modifier");
+  for (const mod of modifierNodes) {
+    if (mod.text === "static") {
+      isStatic = true;
+      break;
+    }
+  }
 
   return {
     name,
-    fields: [],
-    methods: [],
-    type,
-    comment,
+    returnType,
+    static: isStatic,
+    signature: methodNode.text,
+    typeReferences: [],
+    comment: null,
+  };
+}
+
+/**
+ * Get all parameters from a Java method.
+ * 
+ * @param methodNode A `method_declaration` node from the AST
+ * @returns An array of parameter names and types
+ */
+export function getFunctionParameters(methodNode: Node): Array<{ name: string; type: string }> {
+  const parameters: Array<{ name: string; type: string }> = [];
+  
+  if (methodNode.type !== "method_declaration") {
+    return parameters;
   }
+
+  const formalParametersNode = methodNode.childForFieldName("parameters");
+  if (!formalParametersNode) {
+    return parameters;
+  }
+
+  const formalParameterNodes = formalParametersNode.descendantsOfType("formal_parameter");
+  
+  for (const paramNode of formalParameterNodes) {
+    const typeNode = paramNode.childForFieldName("type");
+    const nameNode = paramNode.childForFieldName("name");
+    
+    if (typeNode && nameNode) {
+      parameters.push({
+        type: typeNode.text,
+        name: nameNode.text,
+      });
+    }
+  }
+  
+  return parameters;
+}
+
+/**
+ * Get all fields from a class or interface node.
+ * 
+ * @param classNode A `class_declaration` or `interface_declaration` node
+ * @returns An array of {@link JavaField} models representing the fields found
+ */
+export function getJavaFields(classNode: Node): JavaField[] {
+  const fields: JavaField[] = [];
+  
+  if (classNode.type !== "class_declaration" && classNode.type !== "interface_declaration") {
+    return fields;
+  }
+
+  const fieldDeclarations = classNode.descendantsOfType("field_declaration");
+  
+  for (const fieldNode of fieldDeclarations) {
+    const field = getJavaField(fieldNode);
+    if (field) {
+      fields.push(field);
+    }
+  }
+  
+  return fields;
+}
+
+/**
+ * Extract a single Java field from a field_declaration node.
+ * 
+ * @param fieldNode A `field_declaration` node from the AST
+ * @returns The populated {@link JavaField} model or null if extraction fails
+ */
+export function getJavaField(fieldNode: Node): JavaField | null {
+  if (fieldNode.type !== "field_declaration") {
+    return null;
+  }
+
+  const typeNode = fieldNode.childForFieldName("type");
+  if (!typeNode) {
+    return null;
+  }
+
+  const fieldType = typeNode.text;
+
+  // Get field names - there can be multiple fields declared on one line
+  const declarators = fieldNode.descendantsOfType("variable_declarator");
+  
+  if (declarators.length === 0) {
+    return null;
+  }
+
+  // For simplicity, extract the first declarator
+  const firstDeclarator = declarators[0];
+  const nameNode = firstDeclarator.childForFieldName("name");
+  
+  if (!nameNode) {
+    return null;
+  }
+
+  const name = nameNode.text;
+  
+  // Check for modifiers to determine if static
+  let isStatic = false;
+  const modifierNodes = fieldNode.descendantsOfType("modifier");
+  for (const mod of modifierNodes) {
+    if (mod.text === "static") {
+      isStatic = true;
+      break;
+    }
+  }
+
+  return {
+    name,
+    type: {
+      name: fieldType,
+    },
+    signature: fieldNode.text,
+    static: isStatic,
+  };
 }
 
 

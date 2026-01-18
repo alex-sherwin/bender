@@ -6,7 +6,7 @@ import { defineConfig } from 'vite'
 export default defineConfig({
   build: {
     lib: {
-      entry: './src/extractor2.ts',
+      entry: './src/java-parser.ts',
       name: 'index',
       fileName: 'index',
       formats: ["es"],
