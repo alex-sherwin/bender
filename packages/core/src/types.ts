@@ -109,3 +109,52 @@ export interface JsxElement {
 }
 
 
+// New types for the unified parser architecture
+
+export interface SymbolData {
+  id?: string;
+  kind: string;
+  name: string;
+  qualifiedName: string;
+  signature?: string;
+  location: {
+    file: string;
+    line: number;
+    column: number;
+  };
+  parentId?: string;
+  metadata?: Record<string, any>;
+}
+
+export interface ReferenceData {
+  fromSymbolId?: string;
+  toQualifiedName: string;
+  toSymbolId?: string;
+  refKind: 'call' | 'field_access' | 'type_reference' | 'import';
+  location: {
+    file: string;
+    line: number;
+    column: number;
+  };
+}
+
+export interface ImportData {
+  source: string;
+  wildcard: boolean;
+  importedNames?: string[];
+}
+
+export interface ParsedFileData {
+  file: {
+    path: string;
+    language: string;
+    package?: string;
+  };
+  symbols: SymbolData[];
+  references: ReferenceData[];
+  imports: ImportData[];
+}
+
+export interface LanguageParser {
+  parseFile(filePath: string, content: string): ParsedFileData;
+}

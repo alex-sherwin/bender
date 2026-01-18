@@ -63,7 +63,7 @@ export function getBlockComment(node: Node): string | null {
     return null;
   }
 
-  const nodeIndex = node.index ?? 0;
+  const nodeIndex = (node as any).index ?? 0;
   if (nodeIndex === 0) {
     return null;
   }

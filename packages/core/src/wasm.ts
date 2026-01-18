@@ -60,7 +60,7 @@ console.log("All node types found:", [...new Set(allNodes.map(n => n.type))]);
 console.log("Found comments:", comments);
 
 // Additional debugging - check language and version info
-console.log("Language version:", Java.version);
+console.log("Language version:", (Java as any).version);
 console.log("Language loaded successfully");
 
 // Try parsing just a comment to see if it's recognized

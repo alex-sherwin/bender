@@ -3,14 +3,14 @@
   "version": "0.0.1",
   "type": "module",
   "private": true,
+  "bin": {
+    "bender": "./src/cli.ts"
+  },
   "scripts": {
-    "sshd-core": "tsx ./src/main.ts /Users/asherwin/repos/bak/mina-sshd/sshd-core ./dist/sshd-core.json",
-    "jsch": "tsx ./src/main.ts ../../../bak/jsch ./dist/jsch.json",
-    "extract": "tsx ./src/main2.ts /Users/asherwin/repos/bender/test-projects/java ./dist/out.json",
-    "extract2": "tsx ./src/extractor.ts /Users/asherwin/repos/bak/tls-helpers ./dist/out.json",
     "postinstall": "mkdir -p public && cp node_modules/web-tree-sitter/web-tree-sitter.wasm ./public/web-tree-sitter.wasm && cp node_modules/tree-sitter-java/tree-sitter-java.wasm ./public/tree-sitter-java.wasm && cp node_modules/tree-sitter-typescript/tree-sitter-typescript.wasm ./public/tree-sitter-typescript.wasm && cp node_modules/tree-sitter-typescript/tree-sitter-tsx.wasm ./public/tree-sitter-tsx.wasm && cp node_modules/tree-sitter-c-sharp/tree-sitter-c_sharp.wasm ./public/tree-sitter-c_sharp.wasm && cp node_modules/tree-sitter-bash/tree-sitter-bash.wasm ./public/tree-sitter-bash.wasm",
     "test": "vitest --run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "tsc": "tsc"
   },
   "dependencies": {
     "arktype": "2.1.29",
@@ -22,6 +22,7 @@
     "web-tree-sitter": "0.26.3"
   },
   "devDependencies": {
+    "@types/bun": "1.3.6",
     "@types/node": "24.10.9",
     "oxlint": "1.39.0",
     "tsx": "4.21.0",
