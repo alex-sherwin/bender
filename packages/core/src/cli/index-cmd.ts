@@ -1,28 +1,27 @@
-import { readdir, readFile } from 'node:fs/promises';
-import { join, extname, relative } from 'node:path';
-import { Database } from 'bun:sqlite';
-
 import { indexDirectory } from '../indexer';
 import { log } from '../logger';
+import { parseIndexCommandArgs } from './args-parser';
 
 /**
  * CLI command for indexing a directory
- * Usage: index <source-dir> <output-db> [description]
+ * Usage: index <source-dir> <output-db> [description] [language-flags]
  * @author GitHub Copilot
  */
 export async function indexCommand(args: string[]): Promise<void> {
-  if (args.length < 2) {
-    log.error('Usage: index <source-directory> <output-db-path> [snapshot-description]');
-    process.exit(1);
-  }
-
-  const [sourceDir, dbPath, ...descParts] = args;
-  const description = descParts.join(' ') || undefined;
-
   try {
-    await indexDirectory(sourceDir, dbPath, description);
+    const parsed = parseIndexCommandArgs(args);
+    await indexDirectory(
+      parsed.sourceDir,
+      parsed.outputDb,
+      parsed.description,
+      parsed.languages
+    );
   } catch (error) {
-    log.error('Indexing failed:', error);
+    const message = error instanceof Error ? error.message : String(error);
+    log.error('Parse error:', message);
+    log.error('Usage: index <source-directory> <output-db-path> [snapshot-description]');
+    log.error('Flags: --typescript --bash --java --csharp --tsx --all-langs');
+    log.error('Example: index ./src ./db.sqlite --typescript');
     process.exit(1);
   }
 }
