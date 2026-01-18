@@ -24,7 +24,7 @@ export interface ClassInfo {
   fields: JavaField[];
   methods: JavaMethod[];
   type: "class" | "interface";
-  comment?: string;
+  comment: string | null;
 }
 
 export interface Import {

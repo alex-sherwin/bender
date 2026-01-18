@@ -1,10 +1,44 @@
 import { describe, it, expect } from 'vitest';
 
-import { getImports, findLastNodeOfType, parseJavaFile, createJavaParser, traverseTree, findFirstNodeOfType, getFullyQualifiedImport, getFilePackage } from "../src/extractor2";
+import { getImports, findLastNodeOfType, parseJavaFile, createJavaParser, findFirstNodeOfType, getFullyQualifiedImport, getFilePackage, getClasses } from "../src/extractor2";
 import type { Import } from '../src/types';
 
 
 describe('extractor', () => {
+
+  it('getClasses', async () => {
+
+    const comment = `/**
+ * First block line
+ * <br/>
+ * This is another line
+ */`;
+
+    const parser = await createJavaParser();
+    const tree = parser.parse(`
+package com.example.test;
+
+import javax.net.ssl.TrustManager;
+import javax.net.ssl.X509TrustManager;
+import javax.net.wild.*;
+
+${comment}
+@SuppressWarnings("unchecked")
+public class Test123 { }
+`)!;
+
+    const classes = getClasses(tree.rootNode);
+
+
+    expect(classes).toHaveLength(1);
+    expect(classes[0].name).toEqual("Test123");
+    expect(classes[0].type).toEqual("class");
+    expect(classes[0].comment).toEqual(comment);
+    // expect(imports[0]).toEqual({ pkg: "javax.net.ssl", type: "TrustManager", wildcard: false } satisfies Import);
+    // expect(imports[1]).toEqual({ pkg: "javax.net.ssl", type: "X509TrustManager", wildcard: false } satisfies Import);
+    // expect(imports[2]).toEqual({ pkg: "javax.net.wild", type: "*", wildcard: true } satisfies Import);
+
+  });
 
   it('getImports', async () => {
 
@@ -94,7 +128,7 @@ public class Test { }
 
   });
 
-  it('getFullyQualifiedImport', async () => {
+  it('getFilePackage', async () => {
 
     const parser = await createJavaParser();
     const tree = parser.parse(`

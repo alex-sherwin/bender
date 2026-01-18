@@ -1,18 +1,21 @@
-import { Parser, Language, Node, Tree } from 'web-tree-sitter';
+import { Parser, Language, Node, Tree, TreeCursor } from 'web-tree-sitter';
 
 import { log } from "./logger";
 
 import type { FileData, ClassInfo, JavaMethod, JavaField, Import, Type } from './types';
+import { fail } from 'node:assert';
 
 
 
+export interface Walker {
+  current: Node;
+  cursor: TreeCursor
+  root: Node | Tree;
+}
 
+export function* walkGenerator(root: Node | Tree): Generator<Walker> {
 
-export function* traverseTree(
-  tree: Tree,
-): Generator<Node> {
-
-  const cursor = tree.walk();
+  const cursor = root.walk();
 
   let reachedRoot = false;
   while (!reachedRoot) {
@@ -22,7 +25,7 @@ export function* traverseTree(
     if (typeof currentNode === "function") {
       currentNode = currentNode();
     }
-    yield currentNode as Node;
+    yield { current: currentNode as Node, cursor, root };
 
     if (cursor.gotoFirstChild()) {
       continue;
@@ -96,8 +99,90 @@ export function findLastNodeOfType(target: Node | Tree | null | undefined, type:
 
 }
 
+export function getClasses(node: Node): ClassInfo[] {
+
+  const classes: ClassInfo[] = [];
+
+  const walkerGen = walkGenerator(node);
+
+  for (const walker of walkerGen) {
+    if (walker.current.type === "class_declaration" || walker.current.type === "interface_declaration") {
+      const classInfo = getClass(walker);
+      if (classInfo) {
+        classes.push(classInfo);
+      }
+    }
+  }
+
+  return classes;
+}
+
+/**
+ * Given a {@link Walker}, copy the current {@link Cursor} and walk backwards to the previous sibling,
+ * and look for a block comment there.
+ * 
+ * @param walker The {@link Walker} instance to use for traversing the AST.  I
+ * @returns The block comment as a string, or null if not found.
+ */
+export function getBlockCommentForCurrentNode(walker: Walker): string | null {
+
+  // look for block comments for this class
+  const cursorCopy = walker.cursor.copy();
+  cursorCopy.resetTo(walker.cursor);
+  
+  if (cursorCopy.gotoPreviousSibling()) {
+    if (cursorCopy.currentNode.type === "block_comment") {
+      const text = cursorCopy.currentNode.text;
+      return text;
+    }
+  }
+
+  return null;
+}
+
+export function getRequiredFieldNameValueForNode(node: Node, fieldName: string): string {
+  const result = getFieldNameValueForNode(node, fieldName);
+  if (!result) {
+    throw new Error(`Required field [${fieldName}] not found in node: ${node.type}`);
+  }
+  return result;
+}
+
+export function getFieldNameValueForNode(node: Node, fieldName: string): string | null {
+
+  const fieldNode = node.childForFieldName(fieldName);
+
+  if (!fieldNode) {
+    log.error(`Could not find field [${fieldName}] in node: ${node.type}`);
+    return null;
+  }
+
+  return fieldNode.text;
+}
+
+export function getClass(walker: Walker): ClassInfo | null {
+
+  if (walker.current.type !== "class_declaration" && walker.current.type !== "interface_declaration") {
+    return null;
+  }
+
+  const name = getRequiredFieldNameValueForNode(walker.current, "name");
+  const comment = getBlockCommentForCurrentNode(walker);
+  const type: ClassInfo["type"] = walker.current.type === "class_declaration" ? "class" : "interface";
+
+  return {
+    name,
+    fields: [],
+    methods: [],
+    type,
+    comment,
+  }
+}
+
+
 /**
  * Get all imports from a given AST node.
+ * 
  * @param node Finds all `import_declaration` nodes in the provided AST node and returns an array of {@link Import} models.
  * @returns An array of {@link Import} models representing the imports found in the node.
  */
