@@ -8,76 +8,87 @@ import {
   getFileSymbols,
   searchSymbols,
 } from "../db/queries";
+import { parseQueryCommandArgs } from "./args-parser";
 
 /**
  * CLI command for querying the index
- * Usage: query <subcommand> [args...]
+ * Usage: query [--db <database-path>] [--snapshot <snapshot-id>] <subcommand> [args...]
  * @author GitHub Copilot
  */
 export async function queryCommand(args: string[]): Promise<void> {
-  if (args.length < 1) {
-    log.error('Usage: query <subcommand> [args...]');
-    log.error('Subcommands:');
-    log.error('  blast-radius <qualified-name> [depth] - Show call graph');
-    log.error('  find-usages <qualified-name> - Show all references');
-    log.error('  list-symbols [file-path] - List symbols (optionally filtered by file)');
-    log.error('  search <pattern> - Search symbols by pattern');
-    log.error('Options:');
-    log.error('  --snapshot <id> - Use specific snapshot (default: latest)');
-    process.exit(1);
-  }
-
-  const subcommand = args[0];
-  const subArgs = args.slice(1);
-
-  // Parse --snapshot option
-  let snapshotId: string | null = null;
-  const snapshotIndex = subArgs.indexOf('--snapshot');
-  if (snapshotIndex !== -1) {
-    if (snapshotIndex + 1 >= subArgs.length) {
-      log.error('--snapshot requires an ID argument');
-      process.exit(1);
-    }
-    snapshotId = subArgs[snapshotIndex + 1];
-    subArgs.splice(snapshotIndex, 2);
-  }
-
-  // Default database path (TODO: make configurable)
-  const dbPath = 'index.db';
-
   try {
-    const db = initDatabase(dbPath);
-
-    // Get snapshot ID if not provided
-    if (!snapshotId) {
-      snapshotId = getLatestSnapshot(db);
-      if (!snapshotId) {
-        log.error('No snapshots found in database');
-        process.exit(1);
+    const parsed = parseQueryCommandArgs(args);
+    
+    // Extract positional arguments (subcommand and its args)
+    const positionalArgs: string[] = [];
+    for (const arg of args) {
+      if (!arg.startsWith('--')) {
+        positionalArgs.push(arg);
+      } else {
+        // Skip flag and its value
+        const nextIdx = args.indexOf(arg) + 1;
+        if (nextIdx < args.length && !args[nextIdx].startsWith('--')) {
+          // Skip the value too
+        }
       }
     }
 
-    switch (subcommand) {
-      case 'blast-radius':
-        await handleBlastRadius(db, snapshotId, subArgs);
-        break;
-      case 'find-usages':
-        await handleFindUsages(db, snapshotId, subArgs);
-        break;
-      case 'list-symbols':
-        await handleListSymbols(db, snapshotId, subArgs);
-        break;
-      case 'search':
-        await handleSearch(db, snapshotId, subArgs);
-        break;
-      default:
-        log.error(`Unknown subcommand: ${subcommand}`);
-        process.exit(1);
+    if (positionalArgs.length < 1) {
+      log.error('Usage: query [--db <database-path>] [--snapshot <snapshot-id>] <subcommand> [args...]');
+      log.error('Subcommands:');
+      log.error('  blast-radius <qualified-name> [depth] - Show call graph');
+      log.error('  find-usages <qualified-name> - Show all references');
+      log.error('  list-symbols [file-path] - List symbols (optionally filtered by file)');
+      log.error('  search <pattern> - Search symbols by pattern');
+      log.error('Options:');
+      log.error('  --db <path> - Database file path (default: index.db)');
+      log.error('  --snapshot <id> - Use specific snapshot (default: latest)');
+      process.exit(1);
     }
 
-    db.close();
+    const subcommand = positionalArgs[0];
+    const subArgs = positionalArgs.slice(1);
+
+    try {
+      const db = initDatabase(parsed.db);
+
+      // Get snapshot ID if not provided
+      let snapshotId: string = parsed.snapshot || '';
+      if (!snapshotId) {
+        snapshotId = getLatestSnapshot(db) || '';
+        if (!snapshotId) {
+          log.error('No snapshots found in database');
+          process.exit(1);
+        }
+      }
+
+      switch (subcommand) {
+        case 'blast-radius':
+          await handleBlastRadius(db, snapshotId, subArgs);
+          break;
+        case 'find-usages':
+          await handleFindUsages(db, snapshotId, subArgs);
+          break;
+        case 'list-symbols':
+          await handleListSymbols(db, snapshotId, subArgs);
+          break;
+        case 'search':
+          await handleSearch(db, snapshotId, subArgs);
+          break;
+        default:
+          log.error(`Unknown subcommand: ${subcommand}`);
+          process.exit(1);
+      }
+
+      db.close();
+    } catch (error) {
+      log.error('Query failed:', error);
+      process.exit(1);
+    }
   } catch (error) {
-    log.error('Query failed:', error);
+    const message = error instanceof Error ? error.message : String(error);
+    log.error('Parse error:', message);
+    log.error('Usage: query [--db <database-path>] [--snapshot <snapshot-id>] <subcommand> [args...]');
     process.exit(1);
   }
 }

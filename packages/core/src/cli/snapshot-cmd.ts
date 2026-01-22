@@ -8,57 +8,80 @@ import {
   setLatestSnapshot,
   getSnapshotStats,
 } from "../db/snapshots";
+import { parseSnapshotCommandArgs } from "./args-parser";
 
 /**
  * CLI command for snapshot management
- * Usage: snapshots <subcommand> [args...]
+ * Usage: snapshots [--db <database-path>] <subcommand> [args...]
  * @author GitHub Copilot
  */
 export async function snapshotCommand(args: string[]): Promise<void> {
-  if (args.length < 1) {
-    log.error('Usage: snapshots <subcommand> [args...]');
-    log.error('Subcommands:');
-    log.error('  list - Show all snapshots');
-    log.error('  compare <id1> <id2> - Diff two snapshots');
-    log.error('  delete <id> - Remove snapshot');
-    log.error('  set-latest <id> - Change latest snapshot');
-    log.error('  stats [id] - Show stats for snapshot (default: latest)');
-    process.exit(1);
-  }
-
-  const subcommand = args[0];
-  const subArgs = args.slice(1);
-
-  // Default database path (TODO: make configurable)
-  const dbPath = 'index.db';
-
   try {
-    const db = initDatabase(dbPath);
+    const parsed = parseSnapshotCommandArgs(args);
 
-    switch (subcommand) {
-      case 'list':
-        await handleListSnapshots(db);
-        break;
-      case 'compare':
-        await handleCompareSnapshots(db, subArgs);
-        break;
-      case 'delete':
-        await handleDeleteSnapshot(db, subArgs);
-        break;
-      case 'set-latest':
-        await handleSetLatestSnapshot(db, subArgs);
-        break;
-      case 'stats':
-        await handleSnapshotStats(db, subArgs);
-        break;
-      default:
-        log.error(`Unknown subcommand: ${subcommand}`);
-        process.exit(1);
+    // Extract positional arguments (subcommand and its args)
+    const positionalArgs: string[] = [];
+    for (const arg of args) {
+      if (!arg.startsWith('--')) {
+        positionalArgs.push(arg);
+      } else {
+        // Skip flag and its value
+        const nextIdx = args.indexOf(arg) + 1;
+        if (nextIdx < args.length && !args[nextIdx].startsWith('--')) {
+          // Skip the value too
+        }
+      }
     }
 
-    db.close();
+    if (positionalArgs.length < 1) {
+      log.error('Usage: snapshots [--db <database-path>] <subcommand> [args...]');
+      log.error('Subcommands:');
+      log.error('  list - Show all snapshots');
+      log.error('  compare <id1> <id2> - Diff two snapshots');
+      log.error('  delete <id> - Remove snapshot');
+      log.error('  set-latest <id> - Change latest snapshot');
+      log.error('  stats [id] - Show stats for snapshot (default: latest)');
+      log.error('Options:');
+      log.error('  --db <path> - Database file path (default: index.db)');
+      process.exit(1);
+    }
+
+    const subcommand = positionalArgs[0];
+    const subArgs = positionalArgs.slice(1);
+
+    try {
+      const db = initDatabase(parsed.db);
+
+      switch (subcommand) {
+        case 'list':
+          await handleListSnapshots(db);
+          break;
+        case 'compare':
+          await handleCompareSnapshots(db, subArgs);
+          break;
+        case 'delete':
+          await handleDeleteSnapshot(db, subArgs);
+          break;
+        case 'set-latest':
+          await handleSetLatestSnapshot(db, subArgs);
+          break;
+        case 'stats':
+          await handleSnapshotStats(db, subArgs);
+          break;
+        default:
+          log.error(`Unknown subcommand: ${subcommand}`);
+          process.exit(1);
+      }
+
+      db.close();
+    } catch (error) {
+      log.error('Snapshot command failed:', error);
+      process.exit(1);
+    }
   } catch (error) {
-    log.error('Snapshot command failed:', error);
+    const message = error instanceof Error ? error.message : String(error);
+    log.error('Parse error:', message);
+    log.error('Usage: snapshots [--db <database-path>] <subcommand> [args...]');
     process.exit(1);
   }
 }

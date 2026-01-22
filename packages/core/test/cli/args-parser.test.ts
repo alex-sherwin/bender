@@ -3,12 +3,12 @@ import { parseIndexCommandArgs } from "../../src/cli/args-parser";
 
 describe("CLI argument parser", () => {
   describe("parseIndexCommandArgs", () => {
-    it("should parse basic index command with source and db path only", () => {
-      const args = ["./src", "./output.db"];
+    it("should parse basic index command with --path and --db", () => {
+      const args = ["--path", "./src", "--db", "./output.db"];
       const result = parseIndexCommandArgs(args);
 
-      expect(result.sourceDir).toBe("./src");
-      expect(result.outputDb).toBe("./output.db");
+      expect(result.path).toBe("./src");
+      expect(result.db).toBe("./output.db");
       expect(result.description).toBeUndefined();
       expect(result.languages.size).toBe(5);
       expect(result.languages.has("typescript")).toBe(true);
@@ -19,17 +19,17 @@ describe("CLI argument parser", () => {
     });
 
     it("should parse with description", () => {
-      const args = ["./src", "./output.db", "Initial snapshot"];
+      const args = ["--path", "./src", "--db", "./output.db", "--description", "Initial snapshot"];
       const result = parseIndexCommandArgs(args);
 
-      expect(result.sourceDir).toBe("./src");
-      expect(result.outputDb).toBe("./output.db");
+      expect(result.path).toBe("./src");
+      expect(result.db).toBe("./output.db");
       expect(result.description).toBe("Initial snapshot");
       expect(result.languages.size).toBe(5);
     });
 
     it("should parse --typescript flag only", () => {
-      const args = ["./src", "./output.db", "--typescript"];
+      const args = ["--path", "./src", "--db", "./output.db", "--typescript"];
       const result = parseIndexCommandArgs(args);
 
       expect(result.languages.has("typescript")).toBe(true);
@@ -41,7 +41,7 @@ describe("CLI argument parser", () => {
     });
 
     it("should parse --bash flag only", () => {
-      const args = ["./src", "./output.db", "--bash"];
+      const args = ["--path", "./src", "--db", "./output.db", "--bash"];
       const result = parseIndexCommandArgs(args);
 
       expect(result.languages.has("bash")).toBe(true);
@@ -53,7 +53,7 @@ describe("CLI argument parser", () => {
     });
 
     it("should parse --java flag only", () => {
-      const args = ["./src", "./output.db", "--java"];
+      const args = ["--path", "./src", "--db", "./output.db", "--java"];
       const result = parseIndexCommandArgs(args);
 
       expect(result.languages.has("java")).toBe(true);
@@ -65,7 +65,7 @@ describe("CLI argument parser", () => {
     });
 
     it("should parse --csharp flag only", () => {
-      const args = ["./src", "./output.db", "--csharp"];
+      const args = ["--path", "./src", "--db", "./output.db", "--csharp"];
       const result = parseIndexCommandArgs(args);
 
       expect(result.languages.has("csharp")).toBe(true);
@@ -77,7 +77,7 @@ describe("CLI argument parser", () => {
     });
 
     it("should parse --tsx flag separately from --typescript", () => {
-      const args = ["./src", "./output.db", "--tsx"];
+      const args = ["--path", "./src", "--db", "./output.db", "--tsx"];
       const result = parseIndexCommandArgs(args);
 
       expect(result.languages.has("tsx")).toBe(true);
@@ -89,7 +89,7 @@ describe("CLI argument parser", () => {
     });
 
     it("should combine --typescript and --bash flags", () => {
-      const args = ["./src", "./output.db", "--typescript", "--bash"];
+      const args = ["--path", "./src", "--db", "./output.db", "--typescript", "--bash"];
       const result = parseIndexCommandArgs(args);
 
       expect(result.languages.has("typescript")).toBe(true);
@@ -102,7 +102,9 @@ describe("CLI argument parser", () => {
 
     it("should combine --typescript, --bash, and --java flags", () => {
       const args = [
+        "--path",
         "./src",
+        "--db",
         "./output.db",
         "--typescript",
         "--bash",
@@ -119,7 +121,7 @@ describe("CLI argument parser", () => {
     });
 
     it("should handle --all-langs flag", () => {
-      const args = ["./src", "./output.db", "--all-langs"];
+      const args = ["--path", "./src", "--db", "./output.db", "--all-langs"];
       const result = parseIndexCommandArgs(args);
 
       expect(result.languages.has("typescript")).toBe(true);
@@ -130,49 +132,35 @@ describe("CLI argument parser", () => {
       expect(result.languages.size).toBe(5);
     });
 
-    it("should throw error on missing sourceDir", () => {
-      const args: string[] = [];
+    it("should throw error on missing --path", () => {
+      const args = ["--db", "./output.db"];
 
       expect(() => parseIndexCommandArgs(args)).toThrow();
-      expect(() => parseIndexCommandArgs(args)).toThrow("Missing required arguments");
+      expect(() => parseIndexCommandArgs(args)).toThrow("Missing required argument: --path");
     });
 
-    it("should throw error on missing outputDb", () => {
-      const args = ["./src"];
+    it("should throw error on missing --db", () => {
+      const args = ["--path", "./src"];
 
       expect(() => parseIndexCommandArgs(args)).toThrow();
-      expect(() => parseIndexCommandArgs(args)).toThrow("Missing required arguments");
+      expect(() => parseIndexCommandArgs(args)).toThrow("Missing required argument: --db");
     });
 
     it("should preserve description with language flags", () => {
       const args = [
+        "--path",
         "./src",
+        "--db",
         "./output.db",
+        "--description",
         "My snapshot",
         "--typescript",
         "--bash",
       ];
       const result = parseIndexCommandArgs(args);
 
-      expect(result.sourceDir).toBe("./src");
-      expect(result.outputDb).toBe("./output.db");
-      expect(result.description).toBe("My snapshot");
-      expect(result.languages.has("typescript")).toBe(true);
-      expect(result.languages.has("bash")).toBe(true);
-      expect(result.languages.has("tsx")).toBe(false);
-      expect(result.languages.size).toBe(2);
-    });
-
-    it("should preserve description between flags", () => {
-      const args = [
-        "./src",
-        "./output.db",
-        "--typescript",
-        "My snapshot",
-        "--bash",
-      ];
-      const result = parseIndexCommandArgs(args);
-
+      expect(result.path).toBe("./src");
+      expect(result.db).toBe("./output.db");
       expect(result.description).toBe("My snapshot");
       expect(result.languages.has("typescript")).toBe(true);
       expect(result.languages.has("bash")).toBe(true);
@@ -181,7 +169,7 @@ describe("CLI argument parser", () => {
     });
 
     it("should throw error on invalid flag", () => {
-      const args = ["./src", "./output.db", "--invalid-lang"];
+      const args = ["--path", "./src", "--db", "./output.db", "--invalid-lang"];
 
       expect(() => parseIndexCommandArgs(args)).toThrow();
       expect(() => parseIndexCommandArgs(args)).toThrow("Invalid arguments");
@@ -193,23 +181,11 @@ describe("CLI argument parser", () => {
       expect(() => parseIndexCommandArgs(args)).toThrow();
     });
 
-    it("should handle multi-word descriptions", () => {
-      const args = [
-        "./src",
-        "./output.db",
-        "This is a multi-word description",
-        "--java",
-      ];
-      const result = parseIndexCommandArgs(args);
-
-      expect(result.description).toBe("This is a multi-word description");
-      expect(result.languages.has("java")).toBe(true);
-      expect(result.languages.size).toBe(1);
-    });
-
     it("should parse all languages explicitly", () => {
       const args = [
+        "--path",
         "./src",
+        "--db",
         "./output.db",
         "--typescript",
         "--tsx",
@@ -228,7 +204,7 @@ describe("CLI argument parser", () => {
     });
 
     it("should default to all languages when --all-langs used with no other flags", () => {
-      const args = ["./src", "./output.db", "--all-langs"];
+      const args = ["--path", "./src", "--db", "./output.db", "--all-langs"];
       const result = parseIndexCommandArgs(args);
 
       expect(result.languages.size).toBe(5);
@@ -242,7 +218,7 @@ describe("CLI argument parser", () => {
     });
 
     it("should ignore --all-langs when specific language flags are provided", () => {
-      const args = ["./src", "./output.db", "--typescript", "--all-langs"];
+      const args = ["--path", "./src", "--db", "./output.db", "--typescript", "--all-langs"];
       const result = parseIndexCommandArgs(args);
 
       // When both specific flags and --all-langs are provided, both should be honored
@@ -251,19 +227,19 @@ describe("CLI argument parser", () => {
     });
 
     it("should handle absolute paths for source and output", () => {
-      const args = ["/absolute/path/src", "/absolute/path/output.db"];
+      const args = ["--path", "/absolute/path/src", "--db", "/absolute/path/output.db"];
       const result = parseIndexCommandArgs(args);
 
-      expect(result.sourceDir).toBe("/absolute/path/src");
-      expect(result.outputDb).toBe("/absolute/path/output.db");
+      expect(result.path).toBe("/absolute/path/src");
+      expect(result.db).toBe("/absolute/path/output.db");
     });
 
     it("should handle relative paths with multiple segments", () => {
-      const args = ["./path/to/src", "./path/to/output.db"];
+      const args = ["--path", "./path/to/src", "--db", "./path/to/output.db"];
       const result = parseIndexCommandArgs(args);
 
-      expect(result.sourceDir).toBe("./path/to/src");
-      expect(result.outputDb).toBe("./path/to/output.db");
+      expect(result.path).toBe("./path/to/src");
+      expect(result.db).toBe("./path/to/output.db");
     });
   });
 });
