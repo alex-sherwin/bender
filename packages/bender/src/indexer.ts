@@ -40,6 +40,8 @@ export interface IndexResult {
   symbolsFound: number;
   /** ID of the created snapshot */
   snapshotId: number;
+  /** Git branch name (null if not a git repository) */
+  branchName: string | null;
 }
 
 /**
@@ -385,5 +387,6 @@ export async function indexDirectory(
     filesIndexed,
     symbolsFound,
     snapshotId: snapshot.id,
+    branchName: gitBranch,
   };
 }
