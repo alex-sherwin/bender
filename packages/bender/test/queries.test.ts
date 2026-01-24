@@ -24,7 +24,7 @@ import {
 } from "../src/db/queries";
 import fs from "node:fs/promises";
 import path from "node:path";
-import os from "node:os";
+import { cleanupDatabase } from "./test-utils";
 
 describe("Query Engine", () => {
   let db: Database;
@@ -504,8 +504,9 @@ describe("Query Engine", () => {
     let docId: number;
 
     beforeEach(async () => {
-      // Create temporary test file
-      tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "bender-test-"));
+      // Create temporary test file in test/tmp
+      tempDir = path.join(__dirname, "tmp", `queries-${Date.now()}`);
+      await fs.mkdir(tempDir, { recursive: true });
       testFile = path.join(tempDir, "Test.java");
       
       const content = `package com.example;
@@ -554,11 +555,7 @@ public class Test {
 
     afterEach(async () => {
       // Clean up temp files
-      try {
-        await fs.rm(tempDir, { recursive: true, force: true });
-      } catch {
-        // Ignore cleanup errors
-      }
+      await fs.rm(tempDir, { recursive: true, force: true });
     });
 
     it("returns source code with context", async () => {

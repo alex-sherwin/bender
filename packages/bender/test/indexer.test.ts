@@ -6,23 +6,25 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import fs from "node:fs/promises";
 import path from "node:path";
-import os from "node:os";
 import { indexDirectory } from "../src/indexer";
 import { initializeDatabase } from "../src/db/schema";
 import { getSnapshotByName, listSnapshots } from "../src/db/snapshots";
+import { cleanupDatabase, getTestDbPath } from "./test-utils";
 
 describe("indexer", () => {
   let tempDir: string;
   let dbPath: string;
 
   beforeEach(async () => {
-    // Create a temporary directory for test databases
-    tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "bender-test-"));
+    // Create temporary directory in test/tmp
+    tempDir = path.join(__dirname, "tmp", `indexer-${Date.now()}`);
+    await fs.mkdir(tempDir, { recursive: true });
     dbPath = path.join(tempDir, "test.db");
   });
 
   afterEach(async () => {
-    // Clean up temporary directory
+    // Clean up database files and temp directory
+    cleanupDatabase(dbPath);
     await fs.rm(tempDir, { recursive: true, force: true });
   });
 

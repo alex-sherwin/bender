@@ -8,7 +8,7 @@ import { handleQueryCommand } from "../../src/cli/query-cmd";
 import { handleIndexCommand } from "../../src/cli/index-cmd";
 import fs from "node:fs/promises";
 import path from "node:path";
-import os from "node:os";
+import { cleanupDatabase } from "../test-utils";
 
 describe("query-cmd", () => {
   let tempDir: string;
@@ -16,8 +16,9 @@ describe("query-cmd", () => {
   let fixturesDir: string;
 
   beforeEach(async () => {
-    // Create temporary directory for test databases
-    tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "bender-test-"));
+    // Create temporary directory in test/tmp
+    tempDir = path.join(__dirname, "..", "tmp", `query-cmd-${Date.now()}`);
+    await fs.mkdir(tempDir, { recursive: true });
     dbPath = path.join(tempDir, "test.db");
     fixturesDir = path.join(process.cwd(), "test", "fixtures", "sample-java");
 
@@ -29,7 +30,8 @@ describe("query-cmd", () => {
   });
 
   afterEach(async () => {
-    // Clean up temporary directory
+    // Clean up database files and temp directory
+    cleanupDatabase(dbPath);
     await fs.rm(tempDir, { recursive: true, force: true });
   });
 

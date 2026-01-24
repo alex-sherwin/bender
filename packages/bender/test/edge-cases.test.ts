@@ -1,21 +1,25 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { unlinkSync, rmSync, mkdirSync, writeFileSync, existsSync } from "node:fs";
+import { rmSync, mkdirSync, writeFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { indexDirectory } from "../src/indexer";
 import { Database } from "bun:sqlite";
 import { findSymbolsByPattern, registerRegexpFunction } from "../src/db/queries";
+import { cleanupDatabase, getTestDbPath } from "./test-utils";
 
 describe("edge-cases", () => {
   let dbPath: string;
 
   beforeEach(() => {
-    dbPath = join(import.meta.dir, `test-edge-cases-${Date.now()}-${Math.random()}.db`);
+    dbPath = getTestDbPath("edge-cases");
+    // Ensure tmp directory exists
+    const tmpDir = join(import.meta.dir, "tmp");
+    if (!existsSync(tmpDir)) {
+      mkdirSync(tmpDir, { recursive: true });
+    }
   });
 
   afterEach(() => {
-    if (existsSync(dbPath)) {
-      unlinkSync(dbPath);
-    }
+    cleanupDatabase(dbPath);
   });
 
   describe("empty and missing directories", () => {

@@ -1,0 +1,3 @@
+# Ignore all test database files and temporary test files
+*
+!.gitignore

@@ -27,7 +27,6 @@ import type { OutputSymbol, OutputOptions } from "../src/output/types";
 import yaml from "js-yaml";
 import fs from "node:fs/promises";
 import path from "node:path";
-import os from "node:os";
 
 describe("Output Formatter", () => {
   let db: Database;
@@ -40,8 +39,9 @@ describe("Output Formatter", () => {
     const snapshot = createSnapshot(db, "test-snapshot");
     snapshotId = snapshot.id;
 
-    // Create a temporary directory with test source file
-    tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "formatter-test-"));
+    // Create a temporary directory in test/tmp with test source file
+    tempDir = path.join(__dirname, "tmp", `formatter-${Date.now()}`);
+    await fs.mkdir(tempDir, { recursive: true });
     testFilePath = path.join(tempDir, "Calculator.java");
     await fs.writeFile(
       testFilePath,

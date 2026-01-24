@@ -13,6 +13,7 @@ import { findSymbolsByPattern } from "../src/db/queries";
 import { buildQueryOutput, formatOutput } from "../src/output/formatter";
 import type { OutputOptions } from "../src/output/types";
 import yaml from "js-yaml";
+import { cleanupDatabase } from "./test-utils";
 
 const TEST_DB_PATH = path.join(import.meta.dir, "tmp", "e2e-test.db");
 const FIXTURES_DIR = path.join(import.meta.dir, "fixtures", "sample-java");
@@ -31,11 +32,7 @@ beforeAll(async () => {
  * @author GitHub Copilot
  */
 afterAll(async () => {
-  try {
-    await fs.unlink(TEST_DB_PATH);
-  } catch {
-    // Ignore if file doesn't exist
-  }
+  cleanupDatabase(TEST_DB_PATH);
 });
 
 describe("End-to-End Workflow", () => {
@@ -417,11 +414,7 @@ describe("End-to-End Workflow", () => {
     const SNAPSHOT_TEST_DB = path.join(import.meta.dir, "tmp", "snapshot-test.db");
 
     afterAll(async () => {
-      try {
-        await fs.unlink(SNAPSHOT_TEST_DB);
-      } catch {
-        // Ignore if file doesn't exist
-      }
+      cleanupDatabase(SNAPSHOT_TEST_DB);
     });
 
     it("should create multiple snapshots", async () => {
