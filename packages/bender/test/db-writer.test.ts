@@ -327,7 +327,7 @@ describe("Database Writer", () => {
         });
 
         tx();
-      } catch (error) {
+      } catch {
         // Expected to throw
       }
 

@@ -13,7 +13,6 @@ import { insertDocument, insertSymbols, insertOccurrences, insertRelationships, 
 import { parseJavaFile } from "./parsers/java";
 import { getCurrentBranch, getCurrentCommit } from "./git";
 import { log } from "./logger";
-import type { ParsedSymbol, ParsedOccurrence, ParsedRelationship, ParsedDocumentation } from "./parsers/types";
 
 /**
  * Options for indexing a directory.

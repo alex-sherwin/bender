@@ -631,7 +631,7 @@ class ParserContext {
     // Find comments immediately before this node
     const nodeStartLine = node.startPosition.row;
     
-    for (const { node: commentNode, type } of this.documentationNodes) {
+    for (const { node: commentNode } of this.documentationNodes) {
       const commentEndLine = commentNode.endPosition.row;
       
       // Check if comment is within 1 line before the symbol
@@ -723,7 +723,7 @@ class ParserContext {
    * Resolve a field name to a qualified name.
    * @author GitHub Copilot
    */
-  private resolveFieldName(fieldName: string, node: Node): string {
+  private resolveFieldName(fieldName: string, _node: Node): string {
     // Similar to method resolution
     if (this.symbolStack.length > 0) {
       const currentClass = this.symbolStack[0];

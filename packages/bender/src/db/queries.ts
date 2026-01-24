@@ -5,7 +5,6 @@
 
 import type { Database } from "bun:sqlite";
 import fs from "node:fs/promises";
-import type { SymbolRow, OccurrenceRow, RelationshipRow, DocumentationRow } from "./types";
 
 /**
  * Options for symbol search queries
@@ -76,9 +75,9 @@ export interface SourceInfo {
  * Note: Bun's SQLite doesn't support db.function(), but we keep this for API compatibility.
  * Actual regex filtering is done in JavaScript in findSymbolsByPattern.
  * @author GitHub Copilot
- * @param db Database instance
+ * @param _db Database instance (unused but kept for API compatibility)
  */
-export function registerRegexpFunction(db: Database): void {
+export function registerRegexpFunction(_db: Database): void {
   // Bun's SQLite doesn't support custom functions
   // This is a no-op but kept for API compatibility
   // Regex matching is done in JavaScript in the query functions
@@ -157,7 +156,7 @@ export function findSymbolsByPattern(
     return allSymbols.filter(symbol => 
       regex.test(symbol.qualifiedName) || regex.test(symbol.symbolName)
     );
-  } catch (error) {
+  } catch {
     // Invalid regex pattern - return empty results
     return [];
   }
@@ -382,7 +381,7 @@ export async function getSymbolSource(
       endLine: endLineWithContext + 1,
       sourceCode,
     };
-  } catch (error) {
+  } catch {
     // File might not exist or be readable
     return null;
   }

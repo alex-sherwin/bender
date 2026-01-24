@@ -167,7 +167,7 @@ describe("Snapshot Management", () => {
   describe("setLatestSnapshot", () => {
     it("marks specified snapshot as latest", () => {
       const snapshot1 = createSnapshot(db, "v1.0");
-      const snapshot2 = createSnapshot(db, "v2.0");
+      createSnapshot(db, "v2.0");
 
       // v2.0 should be latest now
       expect(getLatestSnapshot(db)?.name).toBe("v2.0");
@@ -185,8 +185,8 @@ describe("Snapshot Management", () => {
 
     it("unmarks all other snapshots", () => {
       const snapshot1 = createSnapshot(db, "v1.0");
-      const snapshot2 = createSnapshot(db, "v2.0");
-      const snapshot3 = createSnapshot(db, "v3.0");
+      createSnapshot(db, "v2.0");
+      createSnapshot(db, "v3.0");
 
       setLatestSnapshot(db, snapshot1.id);
 

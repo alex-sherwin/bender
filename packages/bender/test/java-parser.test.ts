@@ -7,7 +7,6 @@ import { describe, it, expect } from "vitest";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { parseJavaFile } from "../src/parsers/java";
-import type { ParseResult, ParsedSymbol, ParsedOccurrence } from "../src/parsers/types";
 
 const FIXTURES_DIR = join(__dirname, "fixtures", "sample-java");
 

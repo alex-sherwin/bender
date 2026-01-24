@@ -7,7 +7,6 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import fs from "node:fs/promises";
 import path from "node:path";
 import os from "node:os";
-import { Database } from "bun:sqlite";
 import { indexDirectory } from "../src/indexer";
 import { initializeDatabase } from "../src/db/schema";
 import { getSnapshotByName, listSnapshots } from "../src/db/snapshots";
@@ -98,14 +97,11 @@ describe("indexer", () => {
 
     expect(result1.filesIndexed).toBeGreaterThan(0);
 
-    // Get initial counts
+    // Verify first snapshot was created
     const db1 = initializeDatabase(dbPath);
     const snapshot1 = getSnapshotByName(db1, "replace-test");
     expect(snapshot1).not.toBeNull();
     const snapshot1Id = snapshot1!.id;
-
-    const docStmt1 = db1.prepare("SELECT COUNT(*) as count FROM documents WHERE snapshot_id = ?");
-    const docCount1 = (docStmt1.get(snapshot1Id) as { count: number }).count;
     db1.close();
 
     // Second index with replace=true
@@ -208,7 +204,7 @@ describe("indexer", () => {
     const fixtureDir = path.join(__dirname, "fixtures", "sample-java");
 
     // Index with explicit git metadata retrieval
-    const result = await indexDirectory(fixtureDir, dbPath, {
+    await indexDirectory(fixtureDir, dbPath, {
       snapshotName: "git-test",
       verbose: false,
     });
@@ -229,7 +225,7 @@ describe("indexer", () => {
   it("should set snapshot as latest", async () => {
     const fixtureDir = path.join(__dirname, "fixtures", "sample-java");
 
-    const result = await indexDirectory(fixtureDir, dbPath, {
+    await indexDirectory(fixtureDir, dbPath, {
       snapshotName: "latest-test",
       verbose: false,
     });

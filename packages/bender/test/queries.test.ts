@@ -22,7 +22,6 @@ import {
   getSymbolDocumentation,
   getSymbolSource,
 } from "../src/db/queries";
-import type { QuerySymbol, OccurrenceInfo, RelatedSymbol, DocumentationInfo, SourceInfo } from "../src/db/queries";
 import fs from "node:fs/promises";
 import path from "node:path";
 import os from "node:os";
@@ -557,7 +556,7 @@ public class Test {
       // Clean up temp files
       try {
         await fs.rm(tempDir, { recursive: true, force: true });
-      } catch (error) {
+      } catch {
         // Ignore cleanup errors
       }
     });
@@ -673,7 +672,7 @@ public class Test {
 
     it("can query specific snapshot", () => {
       // Create first snapshot symbols
-      const symbol1 = insertSymbol(db, snapshotId, {
+      insertSymbol(db, snapshotId, {
         qualified_name: "com.example.OldClass",
         symbol_name: "OldClass",
         kind: "class",
@@ -682,7 +681,7 @@ public class Test {
 
       // Create new snapshot
       const snapshot2 = createSnapshot(db, "snapshot-2");
-      const symbol2 = insertSymbol(db, snapshot2.id, {
+      insertSymbol(db, snapshot2.id, {
         qualified_name: "com.example.NewClass",
         symbol_name: "NewClass",
         kind: "class",
